@@ -1,6 +1,7 @@
 import {
   TokensMessage,
   TokensResponse,
+  ToggleHighlightsContentMessage,
   HighlightStyle,
   GradientColors,
 } from "./types";
@@ -52,6 +53,9 @@ let settings = {
   customCSS: "",
 };
 
+// Highlight state
+let highlightsEnabled = true;
+
 // Frequency cache for current page words
 const pageFrequencyCache = new Map<string, number | null>();
 
@@ -91,9 +95,93 @@ async function initializeExtension(): Promise<void> {
     console.log("⚙️ Loading settings...");
     settings = await loadSettings();
 
+    // Load highlight state from storage
+    const result = await chrome.storage.sync.get({ highlightsEnabled: true });
+    highlightsEnabled = result.highlightsEnabled;
+
     console.log("✅ Extension initialization complete");
+    console.log(`🎨 Highlights ${highlightsEnabled ? "enabled" : "disabled"}`);
   } catch (error) {
     console.warn("⚠️ Extension initialization failed, using defaults:", error);
+  }
+}
+
+// Function to remove all highlights from the page
+function removeAllHighlights(): void {
+  console.log("🧹 Removing all highlights...");
+
+  const highlightedElements = document.querySelectorAll(`.${CLS}`);
+  let removedCount = 0;
+
+  highlightedElements.forEach((element) => {
+    const parent = element.parentNode;
+    if (parent) {
+      // Replace the span with its text content
+      const textNode = document.createTextNode(element.textContent || "");
+      parent.replaceChild(textNode, element);
+      removedCount++;
+    }
+  });
+
+  // Normalize text nodes to merge adjacent ones
+  normalizeTextNodes(document.body);
+
+  console.log(`✅ Removed ${removedCount} highlights`);
+}
+
+// Function to normalize text nodes (merge adjacent text nodes)
+function normalizeTextNodes(node: Node): void {
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    // Process child nodes
+    const children = Array.from(node.childNodes);
+    children.forEach((child) => normalizeTextNodes(child));
+
+    // Merge adjacent text nodes
+    let i = 0;
+    while (i < node.childNodes.length - 1) {
+      const current = node.childNodes[i];
+      const next = node.childNodes[i + 1];
+
+      if (
+        current.nodeType === Node.TEXT_NODE &&
+        next.nodeType === Node.TEXT_NODE
+      ) {
+        current.textContent =
+          (current.textContent || "") + (next.textContent || "");
+        node.removeChild(next);
+      } else {
+        i++;
+      }
+    }
+  }
+}
+
+// Function to restore highlights using the last known unknown words
+function restoreHighlights(): void {
+  console.log("🎨 Restoring highlights by performing fresh scan...");
+  scan();
+}
+
+// Function to toggle highlights on/off
+function toggleHighlights(enabled: boolean): void {
+  highlightsEnabled = enabled;
+
+  if (enabled) {
+    console.log("🎨 Enabling highlights...");
+    restoreHighlights();
+  } else {
+    console.log("🚫 Disabling highlights...");
+    removeAllHighlights();
+  }
+
+  // Update stats overlay visibility if needed
+  if (statsToggle) {
+    if (settings.showStats && enabled) {
+      statsToggle.style.display = "flex";
+    } else if (!enabled) {
+      statsToggle.style.display = "none";
+      hideStats();
+    }
   }
 }
 
@@ -300,8 +388,8 @@ function createStatsOverlay(): void {
 
   statsOverlay.addEventListener("mouseleave", resetAutoHide);
 
-  // Show/hide based on settings
-  if (settings.showStats) {
+  // Show/hide based on settings and highlight state
+  if (settings.showStats && highlightsEnabled) {
     statsToggle.style.display = "flex";
   } else {
     statsToggle.style.display = "none";
@@ -360,6 +448,8 @@ function updateStatsOverlay(): void {
 
 // Function to re-apply highlighting with new settings
 async function reapplyHighlighting(): Promise<void> {
+  if (!highlightsEnabled) return;
+
   console.log("🎨 Re-applying highlighting with new settings...");
 
   const highlightedWords = document.querySelectorAll(`.${CLS}`);
@@ -380,7 +470,7 @@ async function reapplyHighlighting(): Promise<void> {
 let isModifyingDOM = false;
 
 function scan(root: Node = document.body): void {
-  if (!segmenter || isModifyingDOM) return;
+  if (!segmenter || isModifyingDOM || !highlightsEnabled) return;
 
   console.log("🔍 Starting Japanese token scan...");
 
@@ -495,24 +585,27 @@ function scan(root: Node = document.body): void {
         )}% knowledge)`
       );
 
-      // Set flag to prevent observer from triggering during our changes
-      isModifyingDOM = true;
+      // Only apply highlights if they're enabled
+      if (highlightsEnabled) {
+        // Set flag to prevent observer from triggering during our changes
+        isModifyingDOM = true;
 
-      console.log("🎨 Starting to highlight unknown words...");
+        console.log("🎨 Starting to highlight unknown words...");
 
-      // Process each text node
-      let highlightedWords = 0;
-      textNodes.forEach((textNode) => {
-        const highlighted = wrapUnknown(textNode, unknownSet);
-        highlightedWords += highlighted;
-      });
+        // Process each text node
+        let highlightedWords = 0;
+        textNodes.forEach((textNode) => {
+          const highlighted = wrapUnknown(textNode, unknownSet);
+          highlightedWords += highlighted;
+        });
 
-      console.log(`✨ Highlighted ${highlightedWords} word instances`);
+        console.log(`✨ Highlighted ${highlightedWords} word instances`);
 
-      // Clear flag after DOM modifications are complete
-      setTimeout(() => {
-        isModifyingDOM = false;
-      }, 100);
+        // Clear flag after DOM modifications are complete
+        setTimeout(() => {
+          isModifyingDOM = false;
+        }, 100);
+      }
 
       // Update UI
       updateStatsOverlay();
@@ -633,6 +726,15 @@ function checkExtensionContext(): boolean {
   }
 }
 
+// Listen for messages from background script
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "TOGGLE_HIGHLIGHTS_CONTENT") {
+    const toggleMsg = message as ToggleHighlightsContentMessage;
+    console.log(`🎛️ Received toggle highlights message: ${toggleMsg.enabled}`);
+    toggleHighlights(toggleMsg.enabled);
+  }
+});
+
 // Initialize immediately based on document state
 async function startExtension(): Promise<void> {
   console.log("🚀 Initializing Anki Highlighter...");
@@ -640,11 +742,15 @@ async function startExtension(): Promise<void> {
   // Initialize frequency database and settings first
   await initializeExtension();
 
-  // Create stats overlay (respects showStats setting)
+  // Create stats overlay (respects showStats setting and highlight state)
   createStatsOverlay();
 
-  // Then start scanning
-  scan();
+  // Only start scanning if highlights are enabled
+  if (highlightsEnabled) {
+    scan();
+  } else {
+    console.log("🚫 Highlights disabled, skipping initial scan");
+  }
 }
 
 if (document.readyState === "loading") {
@@ -660,6 +766,14 @@ if (document.readyState === "loading") {
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === "sync") {
     console.log("⚙️ Settings changed, reloading...");
+
+    // Handle highlight enabled state change
+    if (changes.highlightsEnabled) {
+      const newEnabled = changes.highlightsEnabled.newValue;
+      console.log(`🎛️ Highlights enabled changed to: ${newEnabled}`);
+      toggleHighlights(newEnabled);
+    }
+
     loadSettings()
       .then(async (newSettings) => {
         const oldSettings = { ...settings };
@@ -668,7 +782,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 
         // Update stats overlay visibility
         if (statsToggle) {
-          if (settings.showStats) {
+          if (settings.showStats && highlightsEnabled) {
             statsToggle.style.display = "flex";
           } else {
             statsToggle.style.display = "none";
@@ -676,15 +790,16 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
           }
         }
 
-        // Re-apply highlighting if color-related settings changed
+        // Re-apply highlighting if color-related settings changed and highlights are enabled
         if (
-          oldSettings.colorIntensity !== settings.colorIntensity ||
-          oldSettings.highlightStyle !== settings.highlightStyle ||
-          oldSettings.gradientColors.startColor !==
-            settings.gradientColors.startColor ||
-          oldSettings.gradientColors.endColor !==
-            settings.gradientColors.endColor ||
-          oldSettings.customCSS !== settings.customCSS
+          highlightsEnabled &&
+          (oldSettings.colorIntensity !== settings.colorIntensity ||
+            oldSettings.highlightStyle !== settings.highlightStyle ||
+            oldSettings.gradientColors.startColor !==
+              settings.gradientColors.startColor ||
+            oldSettings.gradientColors.endColor !==
+              settings.gradientColors.endColor ||
+            oldSettings.customCSS !== settings.customCSS)
         ) {
           console.log("🎨 Color settings changed, re-applying highlighting...");
           await reapplyHighlighting();
@@ -701,8 +816,8 @@ const observer = new MutationObserver((mutations) => {
   // Check if extension context is still valid
   if (!checkExtensionContext()) return;
 
-  // Don't scan if we're currently modifying the DOM
-  if (isModifyingDOM) return;
+  // Don't scan if we're currently modifying the DOM or highlights are disabled
+  if (isModifyingDOM || !highlightsEnabled) return;
 
   let shouldScan = false;
 
@@ -753,7 +868,7 @@ document.addEventListener("keydown", (event) => {
   // Ctrl/Cmd + Shift + S to toggle stats
   if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === "S") {
     event.preventDefault();
-    if (settings.showStats && statsToggle) {
+    if (settings.showStats && statsToggle && highlightsEnabled) {
       toggleStats();
     }
   }

@@ -4,55 +4,190 @@
     <meta charset="utf-8" />
     <style>
       body {
-        width: 200px;
+        width: 280px;
         padding: 20px;
-        font-family: Arial, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        background: #f8f9fa;
+        margin: 0;
       }
 
-      button {
+      .header {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+
+      .header h1 {
+        margin: 0 0 5px 0;
+        font-size: 18px;
+        color: #333;
+        font-weight: 600;
+      }
+
+      .header p {
+        margin: 0;
+        font-size: 12px;
+        color: #666;
+      }
+
+      .toggle-section {
+        background: white;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .toggle-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .toggle-label {
+        font-size: 14px;
+        font-weight: 500;
+        color: #333;
+      }
+
+      .toggle-description {
+        font-size: 12px;
+        color: #666;
+        margin-top: 4px;
+      }
+
+      /* Toggle Switch Styles */
+      .toggle-switch {
+        position: relative;
+        width: 48px;
+        height: 24px;
+        background: #ccc;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      .toggle-switch.active {
+        background: #4caf50;
+      }
+
+      .toggle-slider {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 20px;
+        height: 20px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.3s ease;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      }
+
+      .toggle-switch.active .toggle-slider {
+        transform: translateX(24px);
+      }
+
+      .actions-section {
+        background: white;
+        border-radius: 8px;
+        padding: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .action-button {
         width: 100%;
-        padding: 10px;
-        background-color: #4caf50;
+        padding: 10px 16px;
+        background: #2196f3;
         color: white;
         border: none;
-        border-radius: 4px;
+        border-radius: 6px;
         cursor: pointer;
-        font-size: 16px;
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 8px;
+        transition: background-color 0.2s ease;
       }
 
-      button:hover {
-        background-color: #45a049;
+      .action-button:hover {
+        background: #1976d2;
       }
 
-      button:disabled {
-        background-color: #cccccc;
+      .action-button:disabled {
+        background: #ccc;
         cursor: not-allowed;
       }
 
-      .status {
-        margin-top: 10px;
-        padding: 8px;
-        border-radius: 4px;
-        text-align: center;
-        font-size: 14px;
+      .action-button.secondary {
+        background: #6c757d;
+        font-size: 12px;
+        padding: 8px 12px;
       }
 
-      .success {
-        background-color: #d4edda;
+      .action-button.secondary:hover {
+        background: #5a6268;
+      }
+
+      .status {
+        margin-top: 12px;
+        padding: 8px 12px;
+        border-radius: 4px;
+        text-align: center;
+        font-size: 12px;
+        display: none;
+      }
+
+      .status.success {
+        background: #d4edda;
         color: #155724;
         border: 1px solid #c3e6cb;
       }
 
-      .error {
-        background-color: #f8d7da;
+      .status.error {
+        background: #f8d7da;
         color: #721c24;
         border: 1px solid #f5c6cb;
+      }
+
+      .status.info {
+        background: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+      }
+
+      .loading {
+        opacity: 0.6;
+        pointer-events: none;
       }
     </style>
   </head>
   <body>
-    <button id="fetch">Fetch Deck</button>
-    <div id="status" class="status" style="display: none"></div>
+    <div class="header">
+      <h1>🗾 Anki Highlighter</h1>
+      <p>Japanese word highlighting</p>
+    </div>
+
+    <div class="toggle-section">
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Enable Highlights</div>
+          <div class="toggle-description">Show/hide word highlighting</div>
+        </div>
+        <div class="toggle-switch" id="highlightToggle">
+          <div class="toggle-slider"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions-section">
+      <button class="action-button" id="refreshButton">
+        🔄 Refresh Deck Data
+      </button>
+      <button class="action-button secondary" id="optionsButton">
+        ⚙️ Open Options
+      </button>
+    </div>
+
+    <div id="status" class="status"></div>
 
     <script src="popup.js"></script>
   </body>

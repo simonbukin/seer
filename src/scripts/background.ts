@@ -2,8 +2,12 @@ import {
   Message,
   TokensMessage,
   RefreshMessage,
+  ToggleHighlightsMessage,
+  GetHighlightStateMessage,
   TokensResponse,
   RefreshResponse,
+  ToggleHighlightsResponse,
+  GetHighlightStateResponse,
 } from "./types";
 import { initializeFrequencyDB } from "./frequency-db";
 
@@ -17,6 +21,7 @@ interface Settings {
   ignoredDeck: string;
   colorIntensity: number;
   showStats: boolean;
+  highlightsEnabled: boolean;
 }
 
 // Load settings from Chrome storage
@@ -28,12 +33,28 @@ async function loadSettings(): Promise<Settings> {
       ignoredDeck: "",
       colorIntensity: 0.7,
       showStats: true,
+      highlightsEnabled: true,
     };
 
     chrome.storage.sync.get(defaultSettings, (result) => {
       resolve(result as Settings);
     });
   });
+}
+
+// Save highlight enabled state
+async function saveHighlightState(enabled: boolean): Promise<void> {
+  return new Promise((resolve) => {
+    chrome.storage.sync.set({ highlightsEnabled: enabled }, () => {
+      resolve();
+    });
+  });
+}
+
+// Get highlight enabled state
+async function getHighlightState(): Promise<boolean> {
+  const settings = await loadSettings();
+  return settings.highlightsEnabled;
 }
 
 // AnkiConnect helper function
@@ -236,6 +257,57 @@ async function loadIgnored(): Promise<Set<string>> {
         .catch((error) => {
           console.error("Refresh failed:", error);
           const response: RefreshResponse = { ok: false };
+          sendResponse(response);
+        });
+      return true;
+    }
+
+    if (msg.type === "TOGGLE_HIGHLIGHTS") {
+      const toggleMsg = msg as ToggleHighlightsMessage;
+      saveHighlightState(toggleMsg.enabled)
+        .then(() => {
+          // Send message to all content scripts to toggle highlights
+          chrome.tabs.query({}, (tabs) => {
+            tabs.forEach((tab) => {
+              if (tab.id) {
+                chrome.tabs
+                  .sendMessage(tab.id, {
+                    type: "TOGGLE_HIGHLIGHTS_CONTENT",
+                    enabled: toggleMsg.enabled,
+                  })
+                  .catch(() => {
+                    // Ignore errors for tabs that don't have content script
+                  });
+              }
+            });
+          });
+
+          const response: ToggleHighlightsResponse = {
+            ok: true,
+            enabled: toggleMsg.enabled,
+          };
+          sendResponse(response);
+        })
+        .catch((error) => {
+          console.error("Failed to save highlight state:", error);
+          const response: ToggleHighlightsResponse = {
+            ok: false,
+            enabled: toggleMsg.enabled,
+          };
+          sendResponse(response);
+        });
+      return true;
+    }
+
+    if (msg.type === "GET_HIGHLIGHT_STATE") {
+      getHighlightState()
+        .then((enabled) => {
+          const response: GetHighlightStateResponse = { enabled };
+          sendResponse(response);
+        })
+        .catch((error) => {
+          console.error("Failed to get highlight state:", error);
+          const response: GetHighlightStateResponse = { enabled: true };
           sendResponse(response);
         });
       return true;
