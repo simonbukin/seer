@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Anki Highlighter",
+  "version": "0.0.1",
+  "description": "Highlights unknown Japanese words based on your Anki deck",
+  "permissions": ["activeTab", "alarms"],
+  "host_permissions": ["http://127.0.0.1:8765/*", "http://localhost:8765/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": { "default_popup": "popup.html" },
+  "icons": { "48": "icon.png" },
+  "web_accessible_resources": [
+    {
+      "resources": ["freq.csv"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
