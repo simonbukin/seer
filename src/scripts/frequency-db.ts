@@ -24,48 +24,48 @@ interface Settings {
 export function getColorForFrequency(
   frequency: number | null,
   intensity: number = 0.7
-): { color: string; bgColor: string } {
+): { color: string; bgColor: string } | null {
   if (frequency === null) {
     // Gray for words not in frequency list
     return {
-      color: "#333333",
-      bgColor: `rgba(128, 128, 128, ${intensity * 0.15})`,
+      color: "#6b7280",
+      bgColor: `rgba(107, 114, 128, ${intensity * 0.15})`,
     };
   }
 
-  // Logarithmic scale: log10(frequency) mapped to 0-1 range
-  // Most common words (rank 1) -> 0.0 (green)
-  // Rare words (rank 500,000) -> 1.0 (red)
-  const logFreq = Math.log10(frequency);
-  const minLog = Math.log10(1); // Most common word
-  const maxLog = Math.log10(500000); // Rarest word in our dataset
+  // Don't highlight words with frequency above 50,000
+  if (frequency > 50000) {
+    return null;
+  }
 
-  // Normalize to 0-1 range
-  const normalizedFreq = Math.min(
-    1.0,
-    Math.max(0.0, (logFreq - minLog) / (maxLog - minLog))
-  );
+  // Define modern color palette with clean, non-muddy colors
+  let baseColor: string;
 
-  // Create smooth gradient from green to red
-  // Green: hsl(120, 100%, 50%) = rgb(0, 255, 0)
-  // Red: hsl(0, 100%, 50%) = rgb(255, 0, 0)
+  if (frequency <= 1000) {
+    // Very Common - Emerald
+    baseColor = "#10b981";
+  } else if (frequency <= 3000) {
+    // Common - Blue
+    baseColor = "#3b82f6";
+  } else if (frequency <= 6000) {
+    // Uncommon - Purple
+    baseColor = "#8b5cf6";
+  } else if (frequency <= 10000) {
+    // Rare - Amber
+    baseColor = "#f59e0b";
+  } else {
+    // Very Rare - Red
+    baseColor = "#ef4444";
+  }
 
-  // Interpolate hue from 120 (green) to 0 (red)
-  const hue = 120 * (1 - normalizedFreq);
-  const saturation = 70; // Moderate saturation for gentle colors
-  const lightness = 45; // Darker for text color
-
-  // Background uses higher lightness and lower saturation for subtle highlighting
-  const bgSaturation = 40;
-  const bgLightness = 85;
-
-  const textColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-  const bgColor = `hsla(${hue}, ${bgSaturation}%, ${bgLightness}%, ${
-    intensity * 0.2
-  })`;
+  // Convert hex to RGB for background opacity
+  const rgb = hexToRgb(baseColor);
+  const bgColor = rgb
+    ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${intensity * 0.2})`
+    : `rgba(239, 68, 68, ${intensity * 0.2})`;
 
   return {
-    color: textColor,
+    color: baseColor,
     bgColor: bgColor,
   };
 }

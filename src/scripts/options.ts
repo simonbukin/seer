@@ -347,31 +347,36 @@ function updateStylePreview(): void {
   const previewWord2 = document.getElementById("previewWord2");
 
   if (previewWord1 && previewWord2) {
-    // Simulate common word (frequency 500) and rare word (frequency 50000)
+    // Simulate common word (frequency 800) and rare word (frequency 8000)
     const commonColors = useFrequencyColors
-      ? getColorForFrequency(500, colorIntensity)
+      ? getColorForFrequency(800, colorIntensity)
       : getSingleColor(singleColor, colorIntensity);
 
     const rareColors = useFrequencyColors
-      ? getColorForFrequency(50000, colorIntensity)
+      ? getColorForFrequency(8000, colorIntensity)
       : getSingleColor(singleColor, colorIntensity);
 
-    applyHighlightStyle(
-      previewWord1,
-      commonColors,
-      highlightStyle,
-      useFrequencyColors,
-      500,
-      showFrequencyOnHover
-    );
-    applyHighlightStyle(
-      previewWord2,
-      rareColors,
-      highlightStyle,
-      useFrequencyColors,
-      50000,
-      showFrequencyOnHover
-    );
+    if (commonColors) {
+      applyHighlightStyle(
+        previewWord1,
+        commonColors,
+        highlightStyle,
+        useFrequencyColors,
+        800,
+        showFrequencyOnHover
+      );
+    }
+
+    if (rareColors) {
+      applyHighlightStyle(
+        previewWord2,
+        rareColors,
+        highlightStyle,
+        useFrequencyColors,
+        8000,
+        showFrequencyOnHover
+      );
+    }
   }
 }
 

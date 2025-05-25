@@ -24,6 +24,8 @@ import {
   checkAnkiConnect,
 } from "./anki-connect";
 import { segmentJapanese, TokenSegment } from "./kuromoji-tokenizer";
+import { StatsPanel } from "./stats-panel";
+import { StatsManager } from "./stats-manager";
 
 const CLS = "seer-word-unknown";
 
@@ -58,22 +60,9 @@ let ignoredWordsSettings: IgnoredWordsSettings = {
 // Frequency cache for current page words
 const pageFrequencyCache = new Map<string, number | null>();
 
-// Stats tracking
-interface Stats {
-  totalTokens: number;
-  unknownTokens: number;
-  knownTokens: number;
-  mostCommon: Map<string, number>;
-  lastUpdate: Date;
-}
-
-let stats: Stats = {
-  totalTokens: 0,
-  unknownTokens: 0,
-  knownTokens: 0,
-  mostCommon: new Map(),
-  lastUpdate: new Date(),
-};
+// New stats system
+let statsPanel: StatsPanel | null = null;
+let statsManager: StatsManager | null = null;
 
 // Kuromoji tokenizer initialization happens automatically when first used
 console.log("✅ Kuromoji tokenizer will be initialized on first use");
@@ -335,14 +324,9 @@ function toggleHighlights(enabled: boolean): void {
     removeAllHighlights();
   }
 
-  // Update stats overlay visibility if needed
-  if (statsToggle) {
-    if (settings.showStats && enabled) {
-      statsToggle.style.display = "flex";
-    } else if (!enabled) {
-      statsToggle.style.display = "none";
-      hideStats();
-    }
+  // Update stats panel visibility if needed
+  if (statsPanel) {
+    statsPanel.setVisible(settings.showStats && enabled);
   }
 }
 
@@ -490,142 +474,38 @@ function updateCSS(): void {
 updateCSS();
 document.head.appendChild(style);
 
-// Create stats overlay
-let statsOverlay: HTMLElement | null = null;
-let statsToggle: HTMLElement | null = null;
-let statsVisible = false;
+// Initialize new stats system
+function initializeStatsSystem(): void {
+  if (statsPanel || statsManager) return;
 
-function createStatsOverlay(): void {
-  if (statsToggle) return;
-
-  // Create toggle button
-  statsToggle = document.createElement("button");
-  statsToggle.className = "seer-stats-toggle";
-  statsToggle.innerHTML = "🔮";
-  statsToggle.title = "Toggle Seer Stats (Ctrl+Shift+S)";
+  // Create stats manager
+  statsManager = new StatsManager();
 
   // Create stats panel
-  statsOverlay = document.createElement("div");
-  statsOverlay.className = "seer-stats";
+  statsPanel = new StatsPanel();
 
-  statsOverlay.innerHTML = `
-    <div class="title">
-      🔮 Seer
-      <button class="close-btn" title="Close">×</button>
-    </div>
-    <div class="stat-row">
-      <span class="stat-label">Total tokens:</span>
-      <span class="stat-value" id="total-tokens">0</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-label">Known:</span>
-      <span class="stat-value" id="known-tokens">0</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-label">Unknown:</span>
-      <span class="stat-value unknown-value" id="unknown-tokens">0</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-label">Knowledge:</span>
-      <span class="stat-value" id="knowledge-percent">0%</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-label">Status:</span>
-      <span class="seer-loading" id="status">Loading data...</span>
-    </div>
-    <div style="margin-top: 8px; font-size: 10px; color: #999; text-align: center;">
-      Press Ctrl+Shift+S to toggle
-    </div>
-  `;
-
-  document.body.appendChild(statsToggle);
-  document.body.appendChild(statsOverlay);
-
-  // Add event listeners
-  statsToggle.addEventListener("click", toggleStats);
-
-  const closeBtn = statsOverlay.querySelector(".close-btn")!;
-  closeBtn.addEventListener("click", hideStats);
-
-  // Auto-hide after 10 seconds of no interaction
-  let autoHideTimeout: number | null = null;
-
-  const resetAutoHide = () => {
-    if (autoHideTimeout) {
-      clearTimeout(autoHideTimeout);
-    }
-    if (statsVisible) {
-      autoHideTimeout = window.setTimeout(() => {
-        hideStats();
-      }, 10000);
-    }
-  };
-
-  statsOverlay.addEventListener("mouseenter", () => {
-    if (autoHideTimeout) {
-      clearTimeout(autoHideTimeout);
-      autoHideTimeout = null;
+  // Connect them
+  statsManager.onStatsUpdate((stats) => {
+    if (statsPanel) {
+      statsPanel.updateStats(stats);
     }
   });
 
-  statsOverlay.addEventListener("mouseleave", resetAutoHide);
-
-  // Show/hide based on settings and highlight state
-  if (settings.showStats && highlightsEnabled) {
-    statsToggle.style.display = "flex";
-  } else {
-    statsToggle.style.display = "none";
+  // Show/hide based on settings
+  if (statsPanel) {
+    statsPanel.setVisible(settings.showStats && highlightsEnabled);
   }
 }
 
-function toggleStats(): void {
-  if (statsVisible) {
-    hideStats();
-  } else {
-    showStats();
+function destroyStatsSystem(): void {
+  if (statsPanel) {
+    statsPanel.destroy();
+    statsPanel = null;
   }
-}
-
-function showStats(): void {
-  if (statsOverlay) {
-    statsVisible = true;
-    statsOverlay.classList.add("visible");
-
-    // Trigger auto-hide
-    const mouseLeaveEvent = new Event("mouseleave");
-    statsOverlay.dispatchEvent(mouseLeaveEvent);
+  if (statsManager) {
+    statsManager.destroy();
+    statsManager = null;
   }
-}
-
-function hideStats(): void {
-  if (statsOverlay) {
-    statsVisible = false;
-    statsOverlay.classList.remove("visible");
-  }
-}
-
-function updateStatsOverlay(): void {
-  if (!statsOverlay) return;
-
-  const totalTokensEl = statsOverlay.querySelector("#total-tokens")!;
-  const knownTokensEl = statsOverlay.querySelector("#known-tokens")!;
-  const unknownTokensEl = statsOverlay.querySelector("#unknown-tokens")!;
-  const knowledgePercentEl = statsOverlay.querySelector("#knowledge-percent")!;
-  const statusEl = statsOverlay.querySelector("#status")!;
-
-  totalTokensEl.textContent = stats.totalTokens.toString();
-  knownTokensEl.textContent = stats.knownTokens.toString();
-  unknownTokensEl.textContent = stats.unknownTokens.toString();
-
-  const knowledgePercent =
-    stats.totalTokens > 0
-      ? Math.round((stats.knownTokens / stats.totalTokens) * 100)
-      : 0;
-  knowledgePercentEl.textContent = `${knowledgePercent}%`;
-
-  // Update status
-  statusEl.textContent = `Updated ${stats.lastUpdate.toLocaleTimeString()}`;
-  statusEl.className = "stat-value";
 }
 
 // Function to re-apply highlighting with new settings
@@ -729,7 +609,6 @@ async function scanSentences(root: Node = document.body): Promise<void> {
 
   if (allTokens.size === 0) {
     console.log("⚠️ No Japanese tokens found in sentences");
-    updateStatsOverlay();
     return;
   }
 
@@ -787,15 +666,13 @@ async function scanSentences(root: Node = document.body): Promise<void> {
         `✨ Found ${i1SentenceCount} i+1 sentences, highlighted ${totalHighlightedWords} words`
       );
 
-      // Update stats
-      stats.totalTokens = allTokens.size;
-      stats.unknownTokens = response.unknown.filter(
-        (word) => !ignoredWords.has(word)
-      ).length;
-      stats.knownTokens = allTokens.size - response.unknown.length;
-      stats.lastUpdate = new Date();
-
-      updateStatsOverlay();
+      // Update stats via manager
+      if (statsManager) {
+        const unknownWords = new Set(
+          response.unknown.filter((word) => !ignoredWords.has(word))
+        );
+        await statsManager.updateStats(allTokens, unknownWords, ignoredWords);
+      }
     }
   });
 }
@@ -990,7 +867,6 @@ async function scan(root: Node = document.body): Promise<void> {
 
   if (tokens.size === 0) {
     console.log("⚠️ No Japanese tokens found");
-    updateStatsOverlay();
     return;
   }
 
@@ -1033,17 +909,17 @@ async function scan(root: Node = document.body): Promise<void> {
         filteredUnknown.slice(0, 10)
       );
 
-      // Update stats for current page
-      stats.totalTokens = tokens.size;
-      stats.unknownTokens = filteredUnknown.length;
-      stats.knownTokens = tokens.size - response.unknown.length; // Use original unknown count for known calculation
-      stats.lastUpdate = new Date();
+      // Update stats via manager
+      if (statsManager) {
+        const unknownWords = new Set(filteredUnknown);
+        await statsManager.updateStats(tokens, unknownWords, ignoredWords);
+      }
 
       console.log(
-        `📈 Stats: ${stats.knownTokens} known, ${
-          stats.unknownTokens
+        `📈 Stats: ${tokens.size - response.unknown.length} known, ${
+          filteredUnknown.length
         } unknown (${Math.round(
-          (stats.knownTokens / stats.totalTokens) * 100
+          ((tokens.size - response.unknown.length) / tokens.size) * 100
         )}% knowledge)`
       );
 
@@ -1082,8 +958,7 @@ async function scan(root: Node = document.body): Promise<void> {
         }, 100);
       }
 
-      // Update UI
-      updateStatsOverlay();
+      // Stats are automatically updated via the manager
     } else {
       console.error("❌ Invalid response from background script:", response);
     }
@@ -1350,10 +1225,8 @@ function showIgnoreNotification(word: string, success: boolean): void {
 
 // Update stats after ignoring a word
 function updateStatsAfterIgnore(): void {
-  if (stats.unknownTokens > 0) {
-    stats.unknownTokens--;
-    stats.knownTokens++; // Treat ignored words as "known" for stats purposes
-    updateStatsOverlay();
+  if (statsManager) {
+    statsManager.recalculateStats();
   }
 }
 
@@ -1376,6 +1249,22 @@ async function applyFrequencyColoring(
     const colors = settings.useFrequencyColors
       ? getColorForFrequency(frequency, settings.colorIntensity)
       : getSingleColor(settings.singleColor, settings.colorIntensity);
+
+    // If colors is null (frequency > 50k), don't highlight
+    if (colors === null) {
+      // Remove any existing highlighting
+      element.classList.remove(CLS);
+      element.style.backgroundColor = "";
+      element.style.color = "";
+      element.style.textDecoration = "";
+      element.style.textDecorationColor = "";
+      element.style.textDecorationThickness = "";
+      element.style.textDecorationStyle = "";
+      element.style.textShadow = "";
+      element.removeAttribute("data-frequency");
+      element.style.removeProperty("--frequency-content");
+      return;
+    }
 
     // Apply the selected highlight style
     applyHighlightStyle(
@@ -1441,8 +1330,8 @@ async function startExtension(): Promise<void> {
   // Initialize frequency database and settings first
   await initializeExtension();
 
-  // Create stats overlay (respects showStats setting and highlight state)
-  createStatsOverlay();
+  // Initialize stats system (respects showStats setting and highlight state)
+  initializeStatsSystem();
 
   // Only start scanning if highlights are enabled or i+1 mode is enabled
   if (highlightsEnabled || i1SentenceMode) {
@@ -1556,13 +1445,12 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
         settings = newSettings;
         console.log("✅ Settings reloaded:", settings);
 
-        // Update stats overlay visibility
-        if (statsToggle) {
+        // Update stats panel visibility
+        if (statsPanel) {
           if (settings.showStats && highlightsEnabled) {
-            statsToggle.style.display = "flex";
+            statsPanel.show();
           } else {
-            statsToggle.style.display = "none";
-            hideStats(); // Hide if currently visible
+            statsPanel.hide();
           }
         }
 
@@ -1647,8 +1535,8 @@ document.addEventListener("keydown", (event) => {
   // Ctrl/Cmd + Shift + S to toggle stats
   if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === "S") {
     event.preventDefault();
-    if (settings.showStats && statsToggle && highlightsEnabled) {
-      toggleStats();
+    if (settings.showStats && statsPanel && highlightsEnabled) {
+      statsPanel.toggle();
     }
   }
 });
