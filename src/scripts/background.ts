@@ -276,7 +276,7 @@ async function addIgnoredWord(
     await setupIgnoredWords(settings);
 
     // Add the note
-    await ac({
+    const addNoteResult = await ac({
       action: "addNote",
       version: 6,
       params: {
@@ -290,6 +290,34 @@ async function addIgnoredWord(
         },
       },
     });
+
+    // If note was created successfully, suspend its cards
+    if (addNoteResult.result) {
+      const noteId = addNoteResult.result;
+
+      // Find cards for this note
+      const findCardsResult = await ac({
+        action: "findCards",
+        version: 6,
+        params: {
+          query: `nid:${noteId}`,
+        },
+      });
+
+      // Suspend the cards
+      if (findCardsResult.result && findCardsResult.result.length > 0) {
+        await ac({
+          action: "suspend",
+          version: 6,
+          params: {
+            cards: findCardsResult.result,
+          },
+        });
+        console.log(
+          `Suspended ${findCardsResult.result.length} card(s) for ignored word "${word}"`
+        );
+      }
+    }
 
     // Add to local ignored set for immediate effect
     ignored.add(word);

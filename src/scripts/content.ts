@@ -21,33 +21,12 @@ import {
   setupIgnoredWords,
   checkAnkiConnect,
 } from "./anki-connect";
-
-// Type declarations for Intl.Segmenter
-declare namespace Intl {
-  interface Segmenter {
-    segment(input: string): IterableIterator<{
-      segment: string;
-      index: number;
-      input: string;
-      isWordLike?: boolean;
-    }>;
-  }
-
-  interface SegmenterConstructor {
-    new (
-      locales?: string | string[],
-      options?: {
-        granularity?: "grapheme" | "word" | "sentence";
-        localeMatcher?: "lookup" | "best fit";
-      }
-    ): Segmenter;
-  }
-
-  const Segmenter: SegmenterConstructor;
-}
+import { segmentJapanese, TokenSegment } from "./kuromoji-tokenizer";
 
 const CLS = "seer-unknown";
-let segmenter: Intl.Segmenter;
+
+// Kuromoji tokenizer is now used instead of Intl.Segmenter
+// The segmentJapanese function provides the tokenization functionality
 
 // Settings and frequency data
 let settings = {
@@ -93,15 +72,8 @@ let stats: Stats = {
   lastUpdate: new Date(),
 };
 
-// Initialize segmenter
-try {
-  segmenter = new Intl.Segmenter("ja", { granularity: "word" });
-  console.log("✅ Japanese segmenter initialized");
-} catch (error) {
-  console.warn(
-    "❌ Intl.Segmenter not available, extension may not work properly"
-  );
-}
+// Kuromoji tokenizer initialization happens automatically when first used
+console.log("✅ Kuromoji tokenizer will be initialized on first use");
 
 // Initialize frequency database and settings
 async function initializeExtension(): Promise<void> {
@@ -211,7 +183,7 @@ function normalizeTextNodes(node: Node): void {
 // Function to restore highlights using the last known unknown words
 function restoreHighlights(): void {
   console.log("🎨 Restoring highlights by performing fresh scan...");
-  scan();
+  scan().catch((error) => console.error("❌ Error during scan:", error));
 }
 
 // Function to toggle highlights on/off
@@ -519,8 +491,8 @@ async function reapplyHighlighting(): Promise<void> {
 // Flag to prevent scanning during our own DOM modifications
 let isModifyingDOM = false;
 
-function scan(root: Node = document.body): void {
-  if (!segmenter || isModifyingDOM || !highlightsEnabled) return;
+async function scan(root: Node = document.body): Promise<void> {
+  if (isModifyingDOM || !highlightsEnabled) return;
 
   console.log("🔍 Starting Japanese token scan...");
 
@@ -560,9 +532,9 @@ function scan(root: Node = document.body): void {
     textNodes.push(textNode);
     processedTextNodes++;
 
-    // Segment the text and collect tokens
+    // Segment the text and collect tokens using Kuromoji
     try {
-      const segments = segmenter.segment(text);
+      const segments = await segmentJapanese(text);
       let segmentCount = 0;
 
       for (const segment of segments) {
@@ -607,7 +579,7 @@ function scan(root: Node = document.body): void {
 
   console.log("📤 Sending tokens to background script...");
 
-  chrome.runtime.sendMessage(message, (response: TokensResponse) => {
+  chrome.runtime.sendMessage(message, async (response: TokensResponse) => {
     if (chrome.runtime.lastError) {
       console.error("❌ Error sending message:", chrome.runtime.lastError);
       return;
@@ -664,10 +636,10 @@ function scan(root: Node = document.body): void {
 
         // Process each text node
         let highlightedWords = 0;
-        textNodes.forEach((textNode) => {
-          const highlighted = wrapUnknown(textNode, unknownSet);
+        for (const textNode of textNodes) {
+          const highlighted = await wrapUnknown(textNode, unknownSet);
           highlightedWords += highlighted;
-        });
+        }
 
         console.log(`✨ Highlighted ${highlightedWords} word instances`);
 
@@ -685,16 +657,17 @@ function scan(root: Node = document.body): void {
   });
 }
 
-function wrapUnknown(textNode: Text, unknownWords: Set<string>): number {
-  if (!segmenter) return 0;
-
+async function wrapUnknown(
+  textNode: Text,
+  unknownWords: Set<string>
+): Promise<number> {
   const text = textNode.data;
   const parent = textNode.parentNode;
 
   if (!parent) return 0;
 
   try {
-    const segments = Array.from(segmenter.segment(text));
+    const segments = await segmentJapanese(text);
 
     if (segments.length <= 1) return 0;
 
@@ -930,7 +903,9 @@ async function startExtension(): Promise<void> {
 
   // Only start scanning if highlights are enabled
   if (highlightsEnabled) {
-    scan();
+    scan().catch((error) =>
+      console.error("❌ Error during initial scan:", error)
+    );
   } else {
     console.log("🚫 Highlights disabled, skipping initial scan");
   }
@@ -982,7 +957,9 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
                 );
                 // Re-scan to apply new ignored words
                 if (highlightsEnabled) {
-                  scan();
+                  scan().catch((error) =>
+                    console.error("❌ Error during scan:", error)
+                  );
                 }
               } else {
                 console.warn(
@@ -1000,7 +977,9 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
             console.log("📝 Ignored words disabled, cleared local cache");
             // Re-scan to show previously ignored words
             if (highlightsEnabled) {
-              scan();
+              scan().catch((error) =>
+                console.error("❌ Error during scan:", error)
+              );
             }
           } else if (ignoredWordsSettings.enabled) {
             // Settings changed but still enabled, reload ignored words
@@ -1013,7 +992,9 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
                 );
                 // Re-scan to apply updated ignored words
                 if (highlightsEnabled) {
-                  scan();
+                  scan().catch((error) =>
+                    console.error("❌ Error during scan:", error)
+                  );
                 }
               }
             } catch (error) {
@@ -1106,7 +1087,7 @@ const observer = new MutationObserver((mutations) => {
 
   if (shouldScan) {
     console.log("Detected new Japanese content, rescanning...");
-    scan();
+    scan().catch((error) => console.error("❌ Error during scan:", error));
   }
 });
 
