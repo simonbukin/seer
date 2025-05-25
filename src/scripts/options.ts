@@ -1,10 +1,20 @@
 import { getFrequencyStats, refreshFrequencyData } from "./frequency-db";
-import { HighlightStyle, GradientColors } from "./types";
+import {
+  HighlightStyle,
+  GradientColors,
+  IgnoredWordsSettings,
+  RawAnkiConnectResponse,
+} from "./types";
+import {
+  getIgnoredWordsSettings,
+  saveIgnoredWordsSettings,
+  setupIgnoredWords,
+  checkAnkiConnect,
+} from "./anki-connect";
 
 interface Settings {
   primaryDeck: string;
   wordField: string;
-  ignoredDeck: string;
   colorIntensity: number;
   showStats: boolean;
   highlightStyle: HighlightStyle;
@@ -16,7 +26,6 @@ interface Settings {
 const defaultSettings: Settings = {
   primaryDeck: "Kaishi 1.5k",
   wordField: "Word",
-  ignoredDeck: "",
   colorIntensity: 0.7,
   showStats: true,
   highlightStyle: "underline",
@@ -27,27 +36,34 @@ const defaultSettings: Settings = {
   customCSS: "",
 };
 
-// AnkiConnect helper
-async function ankiConnect(params: any): Promise<any> {
-  try {
-    const response = await fetch("http://127.0.0.1:8765", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params),
+// Helper function to send messages to background script
+async function sendMessage<T>(message: any): Promise<T> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (response: T) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve(response);
     });
+  });
+}
 
-    if (!response.ok) {
-      throw new Error(`AnkiConnect request failed: ${response.status}`);
+// AnkiConnect helper that routes through background script
+async function ankiConnect(params: any): Promise<any> {
+  const message = {
+    type: "RAW_ANKI_CONNECT",
+    params: params,
+  };
+
+  try {
+    const response = await sendMessage<RawAnkiConnectResponse>(message);
+    if (response.error) {
+      throw new Error(response.error);
     }
-
-    const result = await response.json();
-    if (result.error) {
-      throw new Error(`AnkiConnect error: ${result.error}`);
-    }
-
-    return result;
+    return { result: response.result };
   } catch (error) {
-    throw error;
+    throw new Error(`AnkiConnect request failed: ${error}`);
   }
 }
 
@@ -97,13 +113,9 @@ async function loadDecks(): Promise<void> {
     const primaryDeckSelect = document.getElementById(
       "primaryDeck"
     ) as HTMLSelectElement;
-    const ignoredDeckSelect = document.getElementById(
-      "ignoredDeck"
-    ) as HTMLSelectElement;
 
     // Clear existing options
     primaryDeckSelect.innerHTML = '<option value="">Select a deck</option>';
-    ignoredDeckSelect.innerHTML = '<option value="">None</option>';
 
     // Add deck options
     result.result.forEach((deckName: string) => {
@@ -111,11 +123,6 @@ async function loadDecks(): Promise<void> {
       option1.value = deckName;
       option1.textContent = deckName;
       primaryDeckSelect.appendChild(option1);
-
-      const option2 = document.createElement("option");
-      option2.value = deckName;
-      option2.textContent = deckName;
-      ignoredDeckSelect.appendChild(option2);
     });
 
     showStatus("deckStatus", "Decks loaded successfully", "success");
@@ -232,8 +239,6 @@ async function initializeOptions(): Promise<void> {
   // Now set the deck values after decks are loaded
   (document.getElementById("primaryDeck") as HTMLSelectElement).value =
     settings.primaryDeck;
-  (document.getElementById("ignoredDeck") as HTMLSelectElement).value =
-    settings.ignoredDeck;
 
   // Set display settings form fields
   (document.getElementById("colorIntensity") as HTMLInputElement).value =
@@ -248,6 +253,22 @@ async function initializeOptions(): Promise<void> {
     settings.gradientColors.endColor;
   (document.getElementById("customCSS") as HTMLTextAreaElement).value =
     settings.customCSS;
+
+  // Load ignored words settings
+  try {
+    const ignoredSettings = await getIgnoredWordsSettings();
+    (
+      document.getElementById("ignoredWordsEnabled") as HTMLInputElement
+    ).checked = ignoredSettings.enabled;
+    (document.getElementById("ignoredDeckName") as HTMLInputElement).value =
+      ignoredSettings.deckName;
+    (document.getElementById("ignoredNoteType") as HTMLInputElement).value =
+      ignoredSettings.noteType;
+    (document.getElementById("ignoredFieldName") as HTMLInputElement).value =
+      ignoredSettings.fieldName;
+  } catch (error) {
+    console.warn("Failed to load ignored words settings:", error);
+  }
 
   // Update color intensity display
   const colorIntensityValue = document.getElementById("colorIntensityValue");
@@ -437,11 +458,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const wordField = (
         document.getElementById("wordField") as HTMLSelectElement
       ).value;
-      const ignoredDeck = (
-        document.getElementById("ignoredDeck") as HTMLSelectElement
-      ).value;
 
-      await saveSettings({ primaryDeck, wordField, ignoredDeck });
+      await saveSettings({ primaryDeck, wordField });
       showStatus("deckStatus", "Deck settings saved successfully", "success");
     });
 
@@ -566,4 +584,118 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("exportFrequency")?.addEventListener("click", () => {
     showStatus("frequencyStatus", "Export functionality coming soon", "info");
   });
+
+  // Setup ignored words deck and note type
+  document
+    .getElementById("setupIgnoredWords")
+    ?.addEventListener("click", async () => {
+      const deckName = (
+        document.getElementById("ignoredDeckName") as HTMLInputElement
+      ).value.trim();
+      const noteType = (
+        document.getElementById("ignoredNoteType") as HTMLInputElement
+      ).value.trim();
+      const fieldName = (
+        document.getElementById("ignoredFieldName") as HTMLInputElement
+      ).value.trim();
+
+      if (!deckName || !noteType || !fieldName) {
+        showStatus("ignoredStatus", "Please fill in all fields", "error");
+        return;
+      }
+
+      try {
+        showStatus("ignoredStatus", "Setting up deck and note type...", "info");
+
+        // Check AnkiConnect first
+        const ankiAvailable = await checkAnkiConnect();
+        if (!ankiAvailable) {
+          showStatus(
+            "ignoredStatus",
+            "AnkiConnect not available. Make sure Anki is running.",
+            "error"
+          );
+          return;
+        }
+
+        const settings: IgnoredWordsSettings = {
+          deckName,
+          noteType,
+          fieldName,
+          enabled: true,
+        };
+
+        const success = await setupIgnoredWords(settings);
+        if (success) {
+          showStatus(
+            "ignoredStatus",
+            "Deck and note type setup successfully",
+            "success"
+          );
+        } else {
+          showStatus(
+            "ignoredStatus",
+            "Failed to setup deck and note type",
+            "error"
+          );
+        }
+      } catch (error) {
+        console.error("Setup failed:", error);
+        showStatus(
+          "ignoredStatus",
+          "Setup failed: " + (error as Error).message,
+          "error"
+        );
+      }
+    });
+
+  // Save ignored words settings
+  document
+    .getElementById("saveIgnoredSettings")
+    ?.addEventListener("click", async () => {
+      const enabled = (
+        document.getElementById("ignoredWordsEnabled") as HTMLInputElement
+      ).checked;
+      const deckName = (
+        document.getElementById("ignoredDeckName") as HTMLInputElement
+      ).value.trim();
+      const noteType = (
+        document.getElementById("ignoredNoteType") as HTMLInputElement
+      ).value.trim();
+      const fieldName = (
+        document.getElementById("ignoredFieldName") as HTMLInputElement
+      ).value.trim();
+
+      if (enabled && (!deckName || !noteType || !fieldName)) {
+        showStatus(
+          "ignoredStatus",
+          "Please fill in all fields when enabling ignored words",
+          "error"
+        );
+        return;
+      }
+
+      try {
+        const settings: IgnoredWordsSettings = {
+          deckName,
+          noteType,
+          fieldName,
+          enabled,
+        };
+
+        await saveIgnoredWordsSettings(settings);
+        showStatus(
+          "ignoredStatus",
+          "Ignored words settings saved successfully",
+          "success"
+        );
+      } catch (error) {
+        console.error("Save failed:", error);
+        showStatus(
+          "ignoredStatus",
+          "Failed to save settings: " + (error as Error).message,
+          "error"
+        );
+      }
+    });
 });

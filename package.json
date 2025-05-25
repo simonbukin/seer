@@ -1,5 +1,5 @@
 {
-  "name": "anki-highlighter",
+  "name": "seer",
   "version": "0.0.1",
   "description": "Chrome extension that highlights unknown Japanese words using AnkiConnect",
   "scripts": {

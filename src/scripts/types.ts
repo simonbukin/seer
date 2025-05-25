@@ -21,6 +21,31 @@ export interface ToggleHighlightsContentMessage {
   enabled: boolean;
 }
 
+export interface AddIgnoredWordMessage {
+  type: "ADD_IGNORED_WORD";
+  word: string;
+  settings: IgnoredWordsSettings;
+}
+
+export interface GetIgnoredWordsMessage {
+  type: "GET_IGNORED_WORDS";
+  settings: IgnoredWordsSettings;
+}
+
+export interface SetupIgnoredWordsMessage {
+  type: "SETUP_IGNORED_WORDS";
+  settings: IgnoredWordsSettings;
+}
+
+export interface CheckAnkiConnectMessage {
+  type: "CHECK_ANKI_CONNECT";
+}
+
+export interface RawAnkiConnectMessage {
+  type: "RAW_ANKI_CONNECT";
+  params: any;
+}
+
 export interface TokensResponse {
   unknown: string[];
 }
@@ -39,17 +64,53 @@ export interface GetHighlightStateResponse {
   enabled: boolean;
 }
 
+export interface AddIgnoredWordResponse {
+  success: boolean;
+  error?: string;
+}
+
+export interface GetIgnoredWordsResponse {
+  words: string[];
+  error?: string;
+}
+
+export interface SetupIgnoredWordsResponse {
+  success: boolean;
+  error?: string;
+}
+
+export interface CheckAnkiConnectResponse {
+  available: boolean;
+  version?: string;
+  error?: string;
+}
+
+export interface RawAnkiConnectResponse {
+  result?: any;
+  error?: string;
+}
+
 export type Message =
   | TokensMessage
   | RefreshMessage
   | ToggleHighlightsMessage
   | GetHighlightStateMessage
-  | ToggleHighlightsContentMessage;
+  | ToggleHighlightsContentMessage
+  | AddIgnoredWordMessage
+  | GetIgnoredWordsMessage
+  | SetupIgnoredWordsMessage
+  | CheckAnkiConnectMessage
+  | RawAnkiConnectMessage;
 export type Response =
   | TokensResponse
   | RefreshResponse
   | ToggleHighlightsResponse
-  | GetHighlightStateResponse;
+  | GetHighlightStateResponse
+  | AddIgnoredWordResponse
+  | GetIgnoredWordsResponse
+  | SetupIgnoredWordsResponse
+  | CheckAnkiConnectResponse
+  | RawAnkiConnectResponse;
 
 // New highlight style interfaces
 export type HighlightStyle = "highlight" | "underline" | "color" | "custom";
@@ -64,4 +125,30 @@ export interface HighlightSettings {
   colorIntensity: number;
   gradientColors: GradientColors;
   customCSS: string;
+}
+
+// AnkiConnect types
+export interface AnkiConnectRequest {
+  action: string;
+  version: number;
+  params?: any;
+}
+
+export interface AnkiConnectResponse {
+  result: any;
+  error: string | null;
+}
+
+export interface AnkiNote {
+  deckName: string;
+  modelName: string;
+  fields: Record<string, string>;
+  tags?: string[];
+}
+
+export interface IgnoredWordsSettings {
+  deckName: string;
+  noteType: string;
+  fieldName: string;
+  enabled: boolean;
 }

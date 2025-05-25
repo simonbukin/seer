@@ -8,6 +8,17 @@ import {
   RefreshResponse,
   ToggleHighlightsResponse,
   GetHighlightStateResponse,
+  AddIgnoredWordMessage,
+  AddIgnoredWordResponse,
+  GetIgnoredWordsMessage,
+  GetIgnoredWordsResponse,
+  SetupIgnoredWordsMessage,
+  SetupIgnoredWordsResponse,
+  CheckAnkiConnectMessage,
+  CheckAnkiConnectResponse,
+  RawAnkiConnectMessage,
+  RawAnkiConnectResponse,
+  IgnoredWordsSettings,
 } from "./types";
 import { initializeFrequencyDB } from "./frequency-db";
 
@@ -18,7 +29,6 @@ let ignored = new Set<string>();
 interface Settings {
   primaryDeck: string;
   wordField: string;
-  ignoredDeck: string;
   colorIntensity: number;
   showStats: boolean;
   highlightsEnabled: boolean;
@@ -30,7 +40,6 @@ async function loadSettings(): Promise<Settings> {
     const defaultSettings: Settings = {
       primaryDeck: "Kaishi 1.5k",
       wordField: "Word",
-      ignoredDeck: "",
       colorIntensity: 0.7,
       showStats: true,
       highlightsEnabled: true,
@@ -173,28 +182,41 @@ async function loadKnown(): Promise<Set<string>> {
   }
 }
 
-// Load ignored words from ignored deck
-async function loadIgnored(): Promise<Set<string>> {
+// Note: Old loadIgnored() function removed - now using loadIgnoredWordsFromSettings()
+
+// Check if AnkiConnect is available
+async function checkAnkiConnect(): Promise<{
+  available: boolean;
+  version?: string;
+  error?: string;
+}> {
   try {
-    const settings = await loadSettings();
-    const ignoredDeck = settings.ignoredDeck;
+    const result = await ac({
+      action: "version",
+      version: 6,
+    });
+    return { available: true, version: result.result };
+  } catch (error) {
+    return {
+      available: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
 
-    if (!ignoredDeck) {
-      console.log("No ignored deck configured");
-      return new Set();
-    }
-
-    console.log(`Loading ignored words from deck: "${ignoredDeck}"`);
-
+// Get ignored words from specific settings
+async function getIgnoredWords(
+  settings: IgnoredWordsSettings
+): Promise<string[]> {
+  try {
     const ids = await ac({
       action: "findNotes",
-      params: { query: `deck:"${ignoredDeck}"` },
+      params: { query: `deck:"${settings.deckName}"` },
       version: 6,
     });
 
     if (ids.result.length === 0) {
-      console.log(`No notes found in ignored deck "${ignoredDeck}"`);
-      return new Set();
+      return [];
     }
 
     const notes = await ac({
@@ -203,35 +225,135 @@ async function loadIgnored(): Promise<Set<string>> {
       version: 6,
     });
 
-    const possibleFields = [
-      "Word",
-      "Expression",
-      "Front",
-      "Question",
-      "Text",
-      "Japanese",
-    ];
-    const ignoredSet = new Set<string>();
-
+    const words: string[] = [];
     notes.result.forEach((note: any) => {
-      for (const fieldName of possibleFields) {
-        if (note.fields[fieldName]) {
-          const value = note.fields[fieldName].value?.trim();
-          if (value && value.length > 0) {
-            const cleanValue = value.replace(/<[^>]*>/g, "").trim();
-            if (cleanValue.length > 0) {
-              ignoredSet.add(cleanValue);
-            }
+      if (note.fields[settings.fieldName]) {
+        const value = note.fields[settings.fieldName].value?.trim();
+        if (value && value.length > 0) {
+          const cleanValue = value.replace(/<[^>]*>/g, "").trim();
+          if (cleanValue.length > 0) {
+            words.push(cleanValue);
           }
         }
       }
     });
 
-    console.log(`Loaded ${ignoredSet.size} ignored words`);
-    return ignoredSet;
+    return words;
   } catch (error) {
-    console.error("Failed to load ignored words:", error);
-    return new Set();
+    throw new Error(
+      `Failed to get ignored words: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+}
+
+// Add a word to the ignored deck
+async function addIgnoredWord(
+  word: string,
+  settings: IgnoredWordsSettings
+): Promise<void> {
+  try {
+    // Check if word already exists to avoid duplicates
+    const existingNotes = await ac({
+      action: "findNotes",
+      version: 6,
+      params: {
+        query: `deck:"${settings.deckName}" ${
+          settings.fieldName
+        }:"${word.trim()}"`,
+      },
+    });
+
+    if (existingNotes.result.length > 0) {
+      console.log(`Word "${word}" already in ignored deck`);
+      // Still add to local set for immediate effect
+      ignored.add(word);
+      return;
+    }
+
+    // First ensure the deck and note type exist
+    await setupIgnoredWords(settings);
+
+    // Add the note
+    await ac({
+      action: "addNote",
+      version: 6,
+      params: {
+        note: {
+          deckName: settings.deckName,
+          modelName: settings.noteType,
+          fields: {
+            [settings.fieldName]: word,
+          },
+          tags: ["seer-ignored"],
+        },
+      },
+    });
+
+    // Add to local ignored set for immediate effect
+    ignored.add(word);
+    console.log(`Added "${word}" to ignored deck and local set`);
+  } catch (error) {
+    throw new Error(
+      `Failed to add ignored word: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+}
+
+// Setup ignored words deck and note type
+async function setupIgnoredWords(
+  settings: IgnoredWordsSettings
+): Promise<void> {
+  try {
+    // Check if deck exists, create if not
+    const deckNames = await ac({
+      action: "deckNames",
+      version: 6,
+    });
+
+    if (!deckNames.result.includes(settings.deckName)) {
+      await ac({
+        action: "createDeck",
+        version: 6,
+        params: {
+          deck: settings.deckName,
+        },
+      });
+    }
+
+    // Check if note type exists, create if not
+    const modelNames = await ac({
+      action: "modelNames",
+      version: 6,
+    });
+
+    if (!modelNames.result.includes(settings.noteType)) {
+      await ac({
+        action: "createModel",
+        version: 6,
+        params: {
+          modelName: settings.noteType,
+          inOrderFields: [settings.fieldName],
+          css: ".card { font-family: arial; font-size: 20px; text-align: center; color: black; background-color: white; }",
+          cardTemplates: [
+            {
+              Name: "Card 1",
+              Front: `{{${settings.fieldName}}}`,
+              Back: `{{${settings.fieldName}}}<br><br><i>This word is ignored by Seer</i>`,
+            },
+          ],
+        },
+      });
+    }
+  } catch (error) {
+    throw new Error(
+      `Failed to setup ignored words: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
   }
 }
 
@@ -312,8 +434,138 @@ async function loadIgnored(): Promise<Set<string>> {
         });
       return true;
     }
+
+    if (msg.type === "CHECK_ANKI_CONNECT") {
+      checkAnkiConnect()
+        .then((result) => {
+          const response: CheckAnkiConnectResponse = result;
+          sendResponse(response);
+        })
+        .catch((error) => {
+          console.error("Failed to check AnkiConnect:", error);
+          const response: CheckAnkiConnectResponse = {
+            available: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
+          sendResponse(response);
+        });
+      return true;
+    }
+
+    if (msg.type === "GET_IGNORED_WORDS") {
+      const getIgnoredMsg = msg as GetIgnoredWordsMessage;
+      getIgnoredWords(getIgnoredMsg.settings)
+        .then((words) => {
+          const response: GetIgnoredWordsResponse = { words };
+          sendResponse(response);
+        })
+        .catch((error) => {
+          console.error("Failed to get ignored words:", error);
+          const response: GetIgnoredWordsResponse = {
+            words: [],
+            error: error instanceof Error ? error.message : String(error),
+          };
+          sendResponse(response);
+        });
+      return true;
+    }
+
+    if (msg.type === "ADD_IGNORED_WORD") {
+      const addIgnoredMsg = msg as AddIgnoredWordMessage;
+      addIgnoredWord(addIgnoredMsg.word, addIgnoredMsg.settings)
+        .then(() => {
+          const response: AddIgnoredWordResponse = { success: true };
+          sendResponse(response);
+        })
+        .catch((error) => {
+          console.error("Failed to add ignored word:", error);
+          const response: AddIgnoredWordResponse = {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
+          sendResponse(response);
+        });
+      return true;
+    }
+
+    if (msg.type === "SETUP_IGNORED_WORDS") {
+      const setupMsg = msg as SetupIgnoredWordsMessage;
+      setupIgnoredWords(setupMsg.settings)
+        .then(() => {
+          const response: SetupIgnoredWordsResponse = { success: true };
+          sendResponse(response);
+        })
+        .catch((error) => {
+          console.error("Failed to setup ignored words:", error);
+          const response: SetupIgnoredWordsResponse = {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
+          sendResponse(response);
+        });
+      return true;
+    }
+
+    if (msg.type === "RAW_ANKI_CONNECT") {
+      const rawMsg = msg as RawAnkiConnectMessage;
+      ac(rawMsg.params)
+        .then((result) => {
+          const response: RawAnkiConnectResponse = { result: result.result };
+          sendResponse(response);
+        })
+        .catch((error) => {
+          console.error("Failed to execute raw AnkiConnect request:", error);
+          const response: RawAnkiConnectResponse = {
+            error: error instanceof Error ? error.message : String(error),
+          };
+          sendResponse(response);
+        });
+      return true;
+    }
   }
 );
+
+// Load ignored words using new settings
+async function loadIgnoredWordsFromSettings(): Promise<Set<string>> {
+  try {
+    // Get ignored words settings from storage
+    const ignoredSettings = await new Promise<IgnoredWordsSettings>(
+      (resolve) => {
+        chrome.storage.sync.get(
+          {
+            ignoredWordsEnabled: false,
+            ignoredDeckName: "SeerIgnored",
+            ignoredNoteType: "Seer",
+            ignoredFieldName: "Word",
+          },
+          (result) => {
+            resolve({
+              enabled: result.ignoredWordsEnabled,
+              deckName: result.ignoredDeckName,
+              noteType: result.ignoredNoteType,
+              fieldName: result.ignoredFieldName,
+            });
+          }
+        );
+      }
+    );
+
+    if (!ignoredSettings.enabled || !ignoredSettings.deckName) {
+      console.log("Ignored words disabled or no deck configured");
+      return new Set();
+    }
+
+    console.log(
+      `Loading ignored words from deck: "${ignoredSettings.deckName}"`
+    );
+    const words = await getIgnoredWords(ignoredSettings);
+    console.log(`Loaded ${words.length} ignored words from new settings`);
+    return new Set(words);
+  } catch (error) {
+    console.error("Failed to load ignored words from new settings:", error);
+    return new Set();
+  }
+}
 
 // Refresh function
 async function refresh(): Promise<void> {
@@ -323,7 +575,7 @@ async function refresh(): Promise<void> {
   // Load both known and ignored words in parallel
   const [knownWords, ignoredWords] = await Promise.all([
     loadKnown(),
-    loadIgnored(),
+    loadIgnoredWordsFromSettings(),
   ]);
 
   known = knownWords;
@@ -358,7 +610,7 @@ chrome.runtime.onInstalled.addListener(() => {
   // Create multiple context menu items for better Arc compatibility
   chrome.contextMenus.create({
     id: "openOptions",
-    title: "Anki Highlighter Options",
+    title: "Seer Options",
     contexts: ["action"], // Right-click on extension icon
   });
 

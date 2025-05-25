@@ -181,7 +181,7 @@ export function applyHighlightStyle(
 // Generate CSS for frequency highlighting with gradient system
 export function generateFrequencyCSS(intensity: number = 0.7): string {
   return `
-    .jp-word-unknown {
+    .seer-word-unknown {
       border-radius: 2px !important;
       padding: 1px 2px !important;
       margin: 0 1px !important;
@@ -190,7 +190,7 @@ export function generateFrequencyCSS(intensity: number = 0.7): string {
       font-weight: 500 !important;
     }
     
-    .jp-word-unknown:hover {
+    .seer-word-unknown:hover {
       transform: scale(1.05) !important;
       box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
       filter: brightness(1.1) !important;

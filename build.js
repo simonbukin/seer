@@ -36,10 +36,47 @@ async function build() {
       { src: "src/manifest.json", dest: "dist/manifest.json" },
       { src: "src/pages/popup.html", dest: "dist/popup.html" },
       { src: "src/pages/options.html", dest: "dist/options.html" },
-      { src: "src/assets/icon.png", dest: "dist/icon.png" },
+    ];
+
+    // Copy icon files
+    const iconFiles = [
+      {
+        src: "src/assets/icons/icon-16.png",
+        dest: "dist/assets/icons/icon-16.png",
+      },
+      {
+        src: "src/assets/icons/icon-32.png",
+        dest: "dist/assets/icons/icon-32.png",
+      },
+      {
+        src: "src/assets/icons/icon-48.png",
+        dest: "dist/assets/icons/icon-48.png",
+      },
+      {
+        src: "src/assets/icons/icon-128.png",
+        dest: "dist/assets/icons/icon-128.png",
+      },
     ];
 
     for (const file of staticFiles) {
+      if (fs.existsSync(file.src)) {
+        fs.copyFileSync(file.src, file.dest);
+        console.log(`Copied ${file.src} -> ${file.dest}`);
+      } else {
+        console.warn(`Warning: ${file.src} not found, skipping...`);
+      }
+    }
+
+    // Ensure icons directory exists in dist
+    if (!fs.existsSync("dist/assets")) {
+      fs.mkdirSync("dist/assets");
+    }
+    if (!fs.existsSync("dist/assets/icons")) {
+      fs.mkdirSync("dist/assets/icons");
+    }
+
+    // Copy icon files
+    for (const file of iconFiles) {
       if (fs.existsSync(file.src)) {
         fs.copyFileSync(file.src, file.dest);
         console.log(`Copied ${file.src} -> ${file.dest}`);

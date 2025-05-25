@@ -1,8 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Anki Highlighter",
+  "name": "Seer",
   "version": "1.0.0",
   "description": "Highlight unknown Japanese words based on Anki deck and frequency data",
+  "icons": {
+    "16": "assets/icons/icon-16.png",
+    "32": "assets/icons/icon-32.png",
+    "48": "assets/icons/icon-48.png",
+    "128": "assets/icons/icon-128.png"
+  },
   "permissions": ["alarms", "storage", "contextMenus"],
   "host_permissions": ["http://127.0.0.1:8765/*", "http://localhost:8765/*"],
   "background": {
@@ -16,7 +22,13 @@
     }
   ],
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "assets/icons/icon-16.png",
+      "32": "assets/icons/icon-32.png",
+      "48": "assets/icons/icon-48.png",
+      "128": "assets/icons/icon-128.png"
+    }
   },
   "options_page": "options.html",
   "options_ui": {

@@ -4,6 +4,7 @@ import {
   ToggleHighlightsContentMessage,
   HighlightStyle,
   GradientColors,
+  IgnoredWordsSettings,
 } from "./types";
 import {
   initializeFrequencyDB,
@@ -13,6 +14,13 @@ import {
   applyHighlightStyle,
   loadSettings,
 } from "./frequency-db";
+import {
+  getIgnoredWordsSettings,
+  getIgnoredWords,
+  addIgnoredWord,
+  setupIgnoredWords,
+  checkAnkiConnect,
+} from "./anki-connect";
 
 // Type declarations for Intl.Segmenter
 declare namespace Intl {
@@ -38,7 +46,7 @@ declare namespace Intl {
   const Segmenter: SegmenterConstructor;
 }
 
-const CLS = "anki-unknown";
+const CLS = "seer-unknown";
 let segmenter: Intl.Segmenter;
 
 // Settings and frequency data
@@ -55,6 +63,15 @@ let settings = {
 
 // Highlight state
 let highlightsEnabled = true;
+
+// Ignored words state
+let ignoredWords = new Set<string>();
+let ignoredWordsSettings: IgnoredWordsSettings = {
+  deckName: "SeerIgnored",
+  noteType: "Seer",
+  fieldName: "Word",
+  enabled: false,
+};
 
 // Frequency cache for current page words
 const pageFrequencyCache = new Map<string, number | null>();
@@ -99,8 +116,43 @@ async function initializeExtension(): Promise<void> {
     const result = await chrome.storage.sync.get({ highlightsEnabled: true });
     highlightsEnabled = result.highlightsEnabled;
 
+    // Load ignored words settings and data
+    console.log("📝 Loading ignored words...");
+    ignoredWordsSettings = await getIgnoredWordsSettings();
+
+    if (ignoredWordsSettings.enabled) {
+      try {
+        // Check if AnkiConnect is available
+        const ankiAvailable = await checkAnkiConnect();
+        if (ankiAvailable) {
+          // Setup deck and note type if needed
+          await setupIgnoredWords(ignoredWordsSettings);
+          // Load ignored words
+          ignoredWords = await getIgnoredWords(ignoredWordsSettings);
+          console.log(
+            `✅ Loaded ${ignoredWords.size} ignored words from deck "${ignoredWordsSettings.deckName}"`
+          );
+          console.log(
+            `📝 Sample ignored words:`,
+            Array.from(ignoredWords).slice(0, 5)
+          );
+        } else {
+          console.warn("⚠️ AnkiConnect not available, ignored words disabled");
+          ignoredWordsSettings.enabled = false;
+        }
+      } catch (error) {
+        console.warn("⚠️ Failed to load ignored words:", error);
+        ignoredWordsSettings.enabled = false;
+      }
+    }
+
     console.log("✅ Extension initialization complete");
     console.log(`🎨 Highlights ${highlightsEnabled ? "enabled" : "disabled"}`);
+    console.log(
+      `📝 Ignored words ${
+        ignoredWordsSettings.enabled ? "enabled" : "disabled"
+      }`
+    );
   } catch (error) {
     console.warn("⚠️ Extension initialization failed, using defaults:", error);
   }
@@ -198,13 +250,11 @@ style.textContent = `
     position: relative;
   }
   
-  .${CLS}:hover {
-    transform: scale(1.05) !important;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
-    filter: brightness(1.1) !important;
+  @keyframes fadeIn {
+    to { opacity: 1; }
   }
 
-  .anki-stats-toggle {
+  .seer-stats-toggle {
     position: fixed;
     top: 10px;
     left: 10px;
@@ -224,12 +274,12 @@ style.textContent = `
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
 
-  .anki-stats-toggle:hover {
+  .seer-stats-toggle:hover {
     background: rgba(0, 0, 0, 0.9);
     transform: scale(1.1);
   }
 
-  .anki-stats {
+  .seer-stats {
     position: fixed;
     top: 60px;
     left: 10px;
@@ -249,13 +299,13 @@ style.textContent = `
     pointer-events: none;
   }
   
-  .anki-stats.visible {
+  .seer-stats.visible {
     opacity: 1;
     transform: translateY(0);
     pointer-events: auto;
   }
   
-  .anki-stats .title {
+  .seer-stats .title {
     font-weight: bold;
     margin-bottom: 10px;
     color: #ffeb3b;
@@ -266,7 +316,7 @@ style.textContent = `
     align-items: center;
   }
   
-  .anki-stats .close-btn {
+  .seer-stats .close-btn {
     background: none;
     border: none;
     color: #ccc;
@@ -282,27 +332,27 @@ style.textContent = `
     transition: all 0.2s ease;
   }
 
-  .anki-stats .close-btn:hover {
+  .seer-stats .close-btn:hover {
     background: rgba(255, 255, 255, 0.1);
     color: white;
   }
   
-  .anki-stats .stat-row {
+  .seer-stats .stat-row {
     display: flex;
     justify-content: space-between;
     margin-bottom: 3px;
   }
   
-  .anki-stats .stat-label {
+  .seer-stats .stat-label {
     color: #ccc;
   }
   
-  .anki-stats .stat-value {
+  .seer-stats .stat-value {
     color: #4caf50;
     font-weight: bold;
   }
   
-  .anki-stats .unknown-value {
+  .seer-stats .unknown-value {
     color: #ff5722;
   }
 `;
@@ -318,17 +368,17 @@ function createStatsOverlay(): void {
 
   // Create toggle button
   statsToggle = document.createElement("button");
-  statsToggle.className = "anki-stats-toggle";
-  statsToggle.innerHTML = "🗾";
-  statsToggle.title = "Toggle Anki Highlighter Stats (Ctrl+Shift+S)";
+  statsToggle.className = "seer-stats-toggle";
+  statsToggle.innerHTML = "🔮";
+  statsToggle.title = "Toggle Seer Stats (Ctrl+Shift+S)";
 
   // Create stats panel
   statsOverlay = document.createElement("div");
-  statsOverlay.className = "anki-stats";
+  statsOverlay.className = "seer-stats";
 
   statsOverlay.innerHTML = `
     <div class="title">
-      🗾 Anki Highlighter
+      🔮 Seer
       <button class="close-btn" title="Close">×</button>
     </div>
     <div class="stat-row">
@@ -349,7 +399,7 @@ function createStatsOverlay(): void {
     </div>
     <div class="stat-row">
       <span class="stat-label">Status:</span>
-      <span class="anki-loading" id="status">Loading data...</span>
+      <span class="seer-loading" id="status">Loading data...</span>
     </div>
     <div style="margin-top: 8px; font-size: 10px; color: #999; text-align: center;">
       Press Ctrl+Shift+S to toggle
@@ -489,7 +539,7 @@ function scan(root: Node = document.body): void {
         return NodeFilter.FILTER_REJECT;
       }
 
-      if (parent.closest(`.${CLS}`) || parent.closest(".anki-stats")) {
+      if (parent.closest(`.${CLS}`) || parent.closest(".seer-stats")) {
         return NodeFilter.FILTER_REJECT;
       }
 
@@ -564,17 +614,37 @@ function scan(root: Node = document.body): void {
     }
 
     if (response && response.unknown) {
-      const unknownSet = new Set(response.unknown);
+      // Filter out ignored words from unknown words
+      const filteredUnknown = response.unknown.filter(
+        (word) => !ignoredWords.has(word)
+      );
+      const unknownSet = new Set(filteredUnknown);
 
       console.log(
         `📥 Received response: ${response.unknown.length} unknown words out of ${tokens.size} total`
       );
-      console.log(`❓ Sample unknown words:`, response.unknown.slice(0, 10));
+      if (ignoredWords.size > 0) {
+        console.log(
+          `📝 Filtered out ${
+            response.unknown.length - filteredUnknown.length
+          } ignored words (local ignored set has ${ignoredWords.size} words)`
+        );
+        if (response.unknown.length - filteredUnknown.length > 0) {
+          const ignoredInThisBatch = response.unknown.filter((word) =>
+            ignoredWords.has(word)
+          );
+          console.log(`📝 Ignored words in this batch:`, ignoredInThisBatch);
+        }
+      }
+      console.log(
+        `❓ Sample unknown words after filtering:`,
+        filteredUnknown.slice(0, 10)
+      );
 
       // Update stats for current page
       stats.totalTokens = tokens.size;
-      stats.unknownTokens = response.unknown.length;
-      stats.knownTokens = tokens.size - response.unknown.length;
+      stats.unknownTokens = filteredUnknown.length;
+      stats.knownTokens = tokens.size - response.unknown.length; // Use original unknown count for known calculation
       stats.lastUpdate = new Date();
 
       console.log(
@@ -641,6 +711,42 @@ function wrapUnknown(textNode: Text, unknownWords: Set<string>): number {
         // Apply frequency-based coloring
         applyFrequencyColoring(span, segment.segment.trim());
 
+        // Add click handler for ignoring words
+        span.addEventListener("click", async (event) => {
+          if (event.altKey) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const word = span.textContent?.trim();
+            if (word && ignoredWordsSettings.enabled) {
+              try {
+                const success = await addIgnoredWord(
+                  word,
+                  ignoredWordsSettings
+                );
+                if (success) {
+                  // Add to local ignored words set
+                  ignoredWords.add(word);
+
+                  // Remove this highlight and any other instances of the same word
+                  removeWordHighlights(word);
+
+                  // Show feedback
+                  showIgnoreNotification(word, true);
+
+                  // Update stats
+                  updateStatsAfterIgnore();
+                } else {
+                  showIgnoreNotification(word, false);
+                }
+              } catch (error) {
+                console.warn(`Failed to ignore word "${word}":`, error);
+                showIgnoreNotification(word, false);
+              }
+            }
+          }
+        });
+
         fragment.appendChild(span);
         highlightedCount++;
       } else {
@@ -655,6 +761,83 @@ function wrapUnknown(textNode: Text, unknownWords: Set<string>): number {
   } catch (error) {
     console.warn("❌ Error wrapping unknown words:", error);
     return 0;
+  }
+}
+
+// Remove highlights for a specific word
+function removeWordHighlights(word: string): void {
+  const highlightedElements = document.querySelectorAll(`.${CLS}`);
+  let removedCount = 0;
+
+  highlightedElements.forEach((element) => {
+    if (element.textContent?.trim() === word) {
+      const parent = element.parentNode;
+      if (parent) {
+        // Replace the span with its text content
+        const textNode = document.createTextNode(element.textContent || "");
+        parent.replaceChild(textNode, element);
+        removedCount++;
+      }
+    }
+  });
+
+  // Normalize text nodes to merge adjacent ones
+  if (removedCount > 0) {
+    normalizeTextNodes(document.body);
+    console.log(`✅ Removed ${removedCount} highlights for word "${word}"`);
+  }
+}
+
+// Show notification when a word is ignored
+function showIgnoreNotification(word: string, success: boolean): void {
+  const notification = document.createElement("div");
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: ${success ? "#4caf50" : "#f44336"};
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 10002;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+    opacity: 0;
+    transform: translateX(100%);
+  `;
+
+  notification.textContent = success
+    ? `✅ "${word}" ignored`
+    : `❌ Failed to ignore "${word}"`;
+
+  document.body.appendChild(notification);
+
+  // Animate in
+  requestAnimationFrame(() => {
+    notification.style.opacity = "1";
+    notification.style.transform = "translateX(0)";
+  });
+
+  // Remove after 3 seconds
+  setTimeout(() => {
+    notification.style.opacity = "0";
+    notification.style.transform = "translateX(100%)";
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 3000);
+}
+
+// Update stats after ignoring a word
+function updateStatsAfterIgnore(): void {
+  if (stats.unknownTokens > 0) {
+    stats.unknownTokens--;
+    stats.knownTokens++; // Treat ignored words as "known" for stats purposes
+    updateStatsOverlay();
   }
 }
 
@@ -737,7 +920,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Initialize immediately based on document state
 async function startExtension(): Promise<void> {
-  console.log("🚀 Initializing Anki Highlighter...");
+  console.log("🚀 Initializing Seer...");
 
   // Initialize frequency database and settings first
   await initializeExtension();
@@ -772,6 +955,75 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
       const newEnabled = changes.highlightsEnabled.newValue;
       console.log(`🎛️ Highlights enabled changed to: ${newEnabled}`);
       toggleHighlights(newEnabled);
+    }
+
+    // Handle ignored words settings changes
+    if (
+      changes.ignoredWordsEnabled ||
+      changes.ignoredDeckName ||
+      changes.ignoredNoteType ||
+      changes.ignoredFieldName
+    ) {
+      console.log("📝 Ignored words settings changed, reloading...");
+      getIgnoredWordsSettings()
+        .then(async (newIgnoredSettings: IgnoredWordsSettings) => {
+          const oldEnabled = ignoredWordsSettings.enabled;
+          ignoredWordsSettings = newIgnoredSettings;
+
+          if (ignoredWordsSettings.enabled && !oldEnabled) {
+            // Ignored words just got enabled
+            try {
+              const ankiAvailable = await checkAnkiConnect();
+              if (ankiAvailable) {
+                await setupIgnoredWords(ignoredWordsSettings);
+                ignoredWords = await getIgnoredWords(ignoredWordsSettings);
+                console.log(
+                  `✅ Loaded ${ignoredWords.size} ignored words after enabling`
+                );
+                // Re-scan to apply new ignored words
+                if (highlightsEnabled) {
+                  scan();
+                }
+              } else {
+                console.warn(
+                  "⚠️ AnkiConnect not available, ignored words disabled"
+                );
+                ignoredWordsSettings.enabled = false;
+              }
+            } catch (error) {
+              console.warn("⚠️ Failed to setup ignored words:", error);
+              ignoredWordsSettings.enabled = false;
+            }
+          } else if (!ignoredWordsSettings.enabled && oldEnabled) {
+            // Ignored words just got disabled
+            ignoredWords.clear();
+            console.log("📝 Ignored words disabled, cleared local cache");
+            // Re-scan to show previously ignored words
+            if (highlightsEnabled) {
+              scan();
+            }
+          } else if (ignoredWordsSettings.enabled) {
+            // Settings changed but still enabled, reload ignored words
+            try {
+              const ankiAvailable = await checkAnkiConnect();
+              if (ankiAvailable) {
+                ignoredWords = await getIgnoredWords(ignoredWordsSettings);
+                console.log(
+                  `✅ Reloaded ${ignoredWords.size} ignored words after settings change`
+                );
+                // Re-scan to apply updated ignored words
+                if (highlightsEnabled) {
+                  scan();
+                }
+              }
+            } catch (error) {
+              console.warn("⚠️ Failed to reload ignored words:", error);
+            }
+          }
+        })
+        .catch((error: any) => {
+          console.warn("❌ Failed to reload ignored words settings:", error);
+        });
     }
 
     loadSettings()
@@ -829,8 +1081,8 @@ const observer = new MutationObserver((mutations) => {
           const element = node as Element;
           if (
             element.classList?.contains(CLS) ||
-            element.classList?.contains("anki-stats") ||
-            element.closest(".anki-stats")
+            element.classList?.contains("seer-stats") ||
+            element.closest(".seer-stats")
           ) {
             continue;
           }
