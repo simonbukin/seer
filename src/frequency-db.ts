@@ -9,24 +9,82 @@ interface FrequencyEntry {
   kana_frequency?: number;
 }
 
-interface FrequencyConfig {
-  veryCommon: { min: number; max: number; color: string; bgColor: string };
-  common: { min: number; max: number; color: string; bgColor: string };
-  uncommon: { min: number; max: number; color: string; bgColor: string };
-  rare: { min: number; max: number; color: string; bgColor: string };
-  veryRare: { min: number; max: number; color: string; bgColor: string };
-  notInList: { color: string; bgColor: string };
+// Settings interface
+interface Settings {
+  colorIntensity: number;
+  showTooltips: boolean;
+  showStats: boolean;
 }
 
-// Centralized frequency configuration
-export const FREQUENCY_CONFIG: FrequencyConfig = {
-  veryCommon: { min: 1, max: 100, color: "#2d5016", bgColor: "#90ee90" },
-  common: { min: 101, max: 500, color: "#8b6914", bgColor: "#ffff99" },
-  uncommon: { min: 501, max: 2000, color: "#cc5500", bgColor: "#ffa500" },
-  rare: { min: 2001, max: 10000, color: "#8b0000", bgColor: "#ff6b6b" },
-  veryRare: { min: 10001, max: Infinity, color: "#4b0082", bgColor: "#dda0dd" },
-  notInList: { color: "#8b0000", bgColor: "#ff6b6b" },
-};
+// Color calculation functions
+export function getColorForFrequency(
+  frequency: number | null,
+  intensity: number = 0.7
+): { color: string; bgColor: string } {
+  if (frequency === null) {
+    // Gray for words not in frequency list
+    return {
+      color: "#333333",
+      bgColor: `rgba(128, 128, 128, ${intensity * 0.15})`,
+    };
+  }
+
+  // Logarithmic scale: log10(frequency) mapped to 0-1 range
+  // Most common words (rank 1) -> 0.0 (green)
+  // Rare words (rank 500,000) -> 1.0 (red)
+  const logFreq = Math.log10(frequency);
+  const minLog = Math.log10(1); // Most common word
+  const maxLog = Math.log10(500000); // Rarest word in our dataset
+
+  // Normalize to 0-1 range
+  const normalizedFreq = Math.min(
+    1.0,
+    Math.max(0.0, (logFreq - minLog) / (maxLog - minLog))
+  );
+
+  // Create smooth gradient from green to red
+  // Green: hsl(120, 100%, 50%) = rgb(0, 255, 0)
+  // Red: hsl(0, 100%, 50%) = rgb(255, 0, 0)
+
+  // Interpolate hue from 120 (green) to 0 (red)
+  const hue = 120 * (1 - normalizedFreq);
+  const saturation = 70; // Moderate saturation for gentle colors
+  const lightness = 45; // Darker for text color
+
+  // Background uses higher lightness and lower saturation for subtle highlighting
+  const bgSaturation = 40;
+  const bgLightness = 85;
+
+  const textColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  const bgColor = `hsla(${hue}, ${bgSaturation}%, ${bgLightness}%, ${
+    intensity * 0.2
+  })`;
+
+  return {
+    color: textColor,
+    bgColor: bgColor,
+  };
+}
+
+// Generate CSS for frequency highlighting with gradient system
+export function generateFrequencyCSS(intensity: number = 0.7): string {
+  return `
+    .jp-word-unknown {
+      border-radius: 2px !important;
+      padding: 1px 2px !important;
+      margin: 0 1px !important;
+      cursor: pointer !important;
+      transition: all 0.2s ease !important;
+      font-weight: 500 !important;
+    }
+    
+    .jp-word-unknown:hover {
+      transform: scale(1.05) !important;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+      filter: brightness(1.1) !important;
+    }
+  `;
+}
 
 // Dexie database class following the documentation pattern
 export class FrequencyDatabase extends Dexie {
@@ -216,75 +274,6 @@ export async function getFrequencyRank(word: string): Promise<number | null> {
   }
 }
 
-// Get frequency tier for a word
-export function getFrequencyTier(
-  frequency: number | null
-): keyof FrequencyConfig {
-  if (frequency === null) return "notInList";
-
-  if (
-    frequency >= FREQUENCY_CONFIG.veryCommon.min &&
-    frequency <= FREQUENCY_CONFIG.veryCommon.max
-  ) {
-    return "veryCommon";
-  } else if (
-    frequency >= FREQUENCY_CONFIG.common.min &&
-    frequency <= FREQUENCY_CONFIG.common.max
-  ) {
-    return "common";
-  } else if (
-    frequency >= FREQUENCY_CONFIG.uncommon.min &&
-    frequency <= FREQUENCY_CONFIG.uncommon.max
-  ) {
-    return "uncommon";
-  } else if (
-    frequency >= FREQUENCY_CONFIG.rare.min &&
-    frequency <= FREQUENCY_CONFIG.rare.max
-  ) {
-    return "rare";
-  } else {
-    return "veryRare";
-  }
-}
-
-// Get color configuration for a frequency tier
-export function getFrequencyColors(tier: keyof FrequencyConfig): {
-  color: string;
-  bgColor: string;
-} {
-  return {
-    color: FREQUENCY_CONFIG[tier].color,
-    bgColor: FREQUENCY_CONFIG[tier].bgColor,
-  };
-}
-
-// Generate CSS for frequency highlighting
-export function generateFrequencyCSS(): string {
-  const tiers = Object.keys(FREQUENCY_CONFIG) as (keyof FrequencyConfig)[];
-
-  return tiers
-    .map((tier) => {
-      const config = FREQUENCY_CONFIG[tier];
-      return `
-      .jp-word-${tier} {
-        background-color: ${config.bgColor} !important;
-        color: ${config.color} !important;
-        border-radius: 2px !important;
-        padding: 1px 2px !important;
-        margin: 0 1px !important;
-        cursor: pointer !important;
-        transition: all 0.2s ease !important;
-      }
-      
-      .jp-word-${tier}:hover {
-        transform: scale(1.05) !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
-      }
-    `;
-    })
-    .join("\n");
-}
-
 // Force refresh frequency data
 export async function refreshFrequencyData(): Promise<void> {
   console.log("🔄 Force refreshing frequency data...");
@@ -304,4 +293,19 @@ export async function getFrequencyStats(): Promise<{
     totalEntries,
     cacheSize: frequencyCache.size,
   };
+}
+
+// Load settings from Chrome storage
+export async function loadSettings(): Promise<Settings> {
+  return new Promise((resolve) => {
+    const defaultSettings: Settings = {
+      colorIntensity: 0.7,
+      showTooltips: true,
+      showStats: true,
+    };
+
+    chrome.storage.sync.get(defaultSettings, (result) => {
+      resolve(result as Settings);
+    });
+  });
 }

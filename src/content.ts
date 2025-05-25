@@ -2,14 +2,46 @@ import { TokensMessage, TokensResponse } from "./types";
 import {
   initializeFrequencyDB,
   getFrequencyRank,
-  getFrequencyTier,
-  getFrequencyColors,
-  generateFrequencyCSS,
-  FREQUENCY_CONFIG,
+  getColorForFrequency,
+  loadSettings,
 } from "./frequency-db";
+
+// Type declarations for Intl.Segmenter
+declare namespace Intl {
+  interface Segmenter {
+    segment(input: string): IterableIterator<{
+      segment: string;
+      index: number;
+      input: string;
+      isWordLike?: boolean;
+    }>;
+  }
+
+  interface SegmenterConstructor {
+    new (
+      locales?: string | string[],
+      options?: {
+        granularity?: "grapheme" | "word" | "sentence";
+        localeMatcher?: "lookup" | "best fit";
+      }
+    ): Segmenter;
+  }
+
+  const Segmenter: SegmenterConstructor;
+}
 
 const CLS = "anki-unknown";
 let segmenter: Intl.Segmenter;
+
+// Settings and frequency data
+let settings = {
+  colorIntensity: 0.7,
+  showTooltips: true,
+  showStats: true,
+};
+
+// Frequency cache for current page words
+const pageFrequencyCache = new Map<string, number | null>();
 
 // Stats tracking
 interface Stats {
@@ -28,96 +60,6 @@ let stats: Stats = {
   lastUpdate: new Date(),
 };
 
-// Cache for frequency ranks to avoid repeated database queries
-const frequencyCache = new Map<string, number | null>();
-
-async function getCachedFrequencyRank(word: string): Promise<number | null> {
-  if (frequencyCache.has(word)) {
-    const cached = frequencyCache.get(word)!;
-    console.log(
-      `💾 Cache hit for "${word}": rank ${
-        cached ? `#${cached.toLocaleString()}` : "not found"
-      }`
-    );
-    return cached;
-  }
-
-  try {
-    console.log(`🔍 Looking up frequency for "${word}"`);
-    const rank = await getFrequencyRank(word);
-    frequencyCache.set(word, rank);
-    return rank;
-  } catch (error) {
-    console.error("❌ Error getting frequency rank:", error);
-    frequencyCache.set(word, null);
-    return null;
-  }
-}
-
-function getFrequencyClass(rank: number | null): string {
-  const tier = getFrequencyTier(rank);
-  return `jp-word-${tier}`;
-}
-
-function getFrequencyInfo(rank: number | null): string {
-  if (!rank) return "Not in frequency list";
-
-  const tier = getFrequencyTier(rank);
-
-  if (tier === "notInList") {
-    return "Not in frequency list";
-  }
-
-  const config = FREQUENCY_CONFIG[tier];
-  if ("min" in config && "max" in config) {
-    return `${config.min}-${config.max === Infinity ? "∞" : config.max}`;
-  }
-
-  return "Unknown frequency range";
-}
-
-async function createTooltip(word: string): Promise<HTMLElement> {
-  const tooltip = document.createElement("div");
-  tooltip.className = "anki-tooltip";
-
-  const rank = await getCachedFrequencyRank(word);
-
-  const freqInfo = rank
-    ? `Frequency rank: #${rank.toLocaleString()}`
-    : "Not in frequency list";
-
-  const categoryInfo = getFrequencyInfo(rank);
-
-  tooltip.innerHTML = `
-    ${word}
-    <span class="freq-info">${freqInfo}</span>
-    <span class="freq-info">${categoryInfo}</span>
-  `;
-  return tooltip;
-}
-
-function addTooltipToSpan(span: HTMLElement, word: string): void {
-  let tooltip: HTMLElement | null = null;
-
-  span.addEventListener("mouseenter", async () => {
-    tooltip = await createTooltip(word);
-    span.appendChild(tooltip);
-    tooltip.offsetHeight;
-    tooltip.classList.add("show");
-  });
-
-  span.addEventListener("mouseleave", () => {
-    if (tooltip) {
-      tooltip.classList.remove("show");
-      setTimeout(() => {
-        if (tooltip && tooltip.parentNode) {
-          tooltip.parentNode.removeChild(tooltip);
-        }
-      }, 200);
-    }
-  });
-}
-
 // Initialize segmenter
 try {
   segmenter = new Intl.Segmenter("ja", { granularity: "word" });
@@ -128,178 +70,105 @@ try {
   );
 }
 
-// Generate CSS dynamically from config
-function generateCSS(): string {
-  let css = `
-    .${CLS} {
-      border-radius: 2px;
-      padding: 0 1px;
-      cursor: help;
-      position: relative;
-      transition: all 0.2s ease;
-    }
-    
-    .${CLS}:hover {
-      filter: brightness(1.2);
-      transform: scale(1.02);
-    }
-  `;
+// Initialize frequency database and settings
+async function initializeExtension(): Promise<void> {
+  try {
+    console.log("🚀 Initializing frequency database...");
+    await initializeFrequencyDB();
 
-  // Add frequency-based styles
-  css += generateFrequencyCSS();
+    console.log("⚙️ Loading settings...");
+    settings = await loadSettings();
 
-  css += `
-    .anki-tooltip {
-      position: absolute;
-      bottom: 100%;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.9);
-      color: white;
-      padding: 6px 10px;
-      border-radius: 4px;
-      font-size: 12px;
-      white-space: nowrap;
-      z-index: 10000;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.2s;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    }
-    
-    .anki-tooltip.show {
-      opacity: 1;
-    }
-    
-    .anki-tooltip::after {
-      content: '';
-      position: absolute;
-      top: 100%;
-      left: 50%;
-      transform: translateX(-50%);
-      border: 4px solid transparent;
-      border-top-color: rgba(0, 0, 0, 0.9);
-    }
-    
-    .anki-tooltip .freq-info {
-      display: block;
-      font-size: 10px;
-      opacity: 0.8;
-      margin-top: 2px;
-    }
-    
-    .anki-stats {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      background: rgba(0, 0, 0, 0.85);
-      color: white;
-      padding: 12px;
-      border-radius: 8px;
-      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-      font-size: 11px;
-      line-height: 1.4;
-      z-index: 9999;
-      min-width: 200px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      transition: all 0.3s ease;
-    }
-    
-    .anki-stats.collapsed {
-      transform: translateX(-200px);
-    }
-    
-    .anki-stats .title {
-      font-weight: bold;
-      margin-bottom: 8px;
-      color: #ffeb3b;
-      border-bottom: 1px solid #333;
-      padding-bottom: 4px;
-    }
-    
-    .anki-stats .stat-row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 2px;
-    }
-    
-    .anki-stats .stat-label {
-      color: #ccc;
-    }
-    
-    .anki-stats .stat-value {
-      color: #4caf50;
-      font-weight: bold;
-    }
-    
-    .anki-stats .unknown-value {
-      color: #ff5722;
-    }
-    
-    .anki-stats .toggle {
-      position: absolute;
-      right: -20px;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 20px;
-      height: 40px;
-      background: rgba(0, 0, 0, 0.85);
-      border-radius: 0 8px 8px 0;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 12px;
-    }
-    
-    .anki-stats .common-words {
-      margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px solid #333;
-      font-size: 10px;
-    }
-    
-    .anki-stats .common-word {
-      display: inline-block;
-      background: rgba(255, 255, 255, 0.1);
-      padding: 1px 4px;
-      margin: 1px;
-      border-radius: 2px;
-    }
-    
-    .anki-stats .freq-legend {
-      margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px solid #333;
-      font-size: 9px;
-    }
-    
-    .anki-stats .freq-item {
-      display: flex;
-      align-items: center;
-      margin-bottom: 2px;
-    }
-    
-    .anki-stats .freq-color {
-      width: 12px;
-      height: 8px;
-      border-radius: 2px;
-      margin-right: 6px;
-    }
-    
-    .anki-loading {
-      color: #ffeb3b;
-      font-style: italic;
-    }
-  `;
-
-  return css;
+    console.log("✅ Extension initialization complete");
+  } catch (error) {
+    console.warn("⚠️ Extension initialization failed, using defaults:", error);
+  }
 }
 
-// Apply CSS
+// Dynamic CSS for gradient highlighting
 const style = document.createElement("style");
-style.textContent = generateCSS();
+style.textContent = `
+  .${CLS} {
+    border-radius: 2px !important;
+    padding: 1px 2px !important;
+    margin: 0 1px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    font-weight: 500 !important;
+    position: relative;
+  }
+  
+  .${CLS}:hover {
+    transform: scale(1.05) !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+    filter: brightness(1.1) !important;
+  }
+
+  .anki-stats {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 12px;
+    border-radius: 8px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    z-index: 9999;
+    min-width: 200px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+  }
+  
+  .anki-stats.collapsed {
+    transform: translateX(-200px);
+  }
+  
+  .anki-stats .title {
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: #ffeb3b;
+    border-bottom: 1px solid #333;
+    padding-bottom: 4px;
+  }
+  
+  .anki-stats .stat-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 2px;
+  }
+  
+  .anki-stats .stat-label {
+    color: #ccc;
+  }
+  
+  .anki-stats .stat-value {
+    color: #4caf50;
+    font-weight: bold;
+  }
+  
+  .anki-stats .unknown-value {
+    color: #ff5722;
+  }
+  
+  .anki-stats .toggle {
+    position: absolute;
+    right: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 40px;
+    background: rgba(0, 0, 0, 0.85);
+    border-radius: 0 8px 8px 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 12px;
+  }
+`;
 document.head.appendChild(style);
 
 // Create stats overlay
@@ -310,27 +179,6 @@ function createStatsOverlay(): void {
 
   statsOverlay = document.createElement("div");
   statsOverlay.className = "anki-stats";
-
-  // Generate legend items from config
-  const tierLabels = {
-    veryCommon: "Very Common (1-100)",
-    common: "Common (101-500)",
-    uncommon: "Uncommon (501-2k)",
-    rare: "Rare (2k-10k)",
-    veryRare: "Very Rare (10k+)",
-    notInList: "Not in list",
-  };
-
-  const legendItems = Object.entries(FREQUENCY_CONFIG)
-    .map(
-      ([key, config]) => `
-    <div class="freq-item">
-      <div class="freq-color" style="background: ${config.bgColor};"></div>
-      <span>${tierLabels[key as keyof typeof tierLabels]}</span>
-    </div>
-  `
-    )
-    .join("");
 
   statsOverlay.innerHTML = `
     <div class="title">🗾 Anki Highlighter</div>
@@ -353,14 +201,6 @@ function createStatsOverlay(): void {
     <div class="stat-row">
       <span class="stat-label">Status:</span>
       <span class="anki-loading" id="status">Loading data...</span>
-    </div>
-    <div class="freq-legend">
-      <div style="color: #ccc; margin-bottom: 4px;">Frequency levels:</div>
-      ${legendItems}
-    </div>
-    <div class="common-words">
-      <div style="color: #ccc; margin-bottom: 4px;">Most common unknown:</div>
-      <div id="common-words-list"></div>
     </div>
     <div class="toggle">◀</div>
   `;
@@ -385,7 +225,6 @@ function updateStatsOverlay(): void {
   const unknownTokensEl = statsOverlay.querySelector("#unknown-tokens")!;
   const knowledgePercentEl = statsOverlay.querySelector("#knowledge-percent")!;
   const statusEl = statsOverlay.querySelector("#status")!;
-  const commonWordsEl = statsOverlay.querySelector("#common-words-list")!;
 
   totalTokensEl.textContent = stats.totalTokens.toString();
   knownTokensEl.textContent = stats.knownTokens.toString();
@@ -400,17 +239,6 @@ function updateStatsOverlay(): void {
   // Update status
   statusEl.textContent = `Updated ${stats.lastUpdate.toLocaleTimeString()}`;
   statusEl.className = "stat-value";
-
-  // Show top 5 most common unknown words (current page frequency)
-  const sortedCommon = Array.from(stats.mostCommon.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
-
-  commonWordsEl.innerHTML = sortedCommon
-    .map(
-      ([word, count]) => `<span class="common-word">${word} (${count})</span>`
-    )
-    .join("");
 }
 
 // Flag to prevent scanning during our own DOM modifications
@@ -436,11 +264,7 @@ function scan(root: Node = document.body): void {
         return NodeFilter.FILTER_REJECT;
       }
 
-      if (
-        parent.closest(`.${CLS}`) ||
-        parent.closest(".anki-stats") ||
-        parent.closest(".anki-tooltip")
-      ) {
+      if (parent.closest(`.${CLS}`) || parent.closest(".anki-stats")) {
         return NodeFilter.FILTER_REJECT;
       }
 
@@ -499,7 +323,6 @@ function scan(root: Node = document.body): void {
 
   if (tokens.size === 0) {
     console.log("⚠️ No Japanese tokens found");
-    // Create stats overlay even with no tokens
     createStatsOverlay();
     updateStatsOverlay();
     return;
@@ -510,84 +333,63 @@ function scan(root: Node = document.body): void {
 
   console.log("📤 Sending tokens to background script...");
 
-  (globalThis as any).chrome?.runtime?.sendMessage(
-    message,
-    async (response: TokensResponse) => {
-      if (response && response.unknown) {
-        const unknownSet = new Set(response.unknown);
-
-        console.log(
-          `📥 Received response: ${response.unknown.length} unknown words out of ${tokens.size} total`
-        );
-        console.log(`❓ Sample unknown words:`, response.unknown.slice(0, 10));
-
-        // Update stats for current page
-        stats.totalTokens = tokens.size;
-        stats.unknownTokens = response.unknown.length;
-        stats.knownTokens = tokens.size - response.unknown.length;
-        stats.lastUpdate = new Date();
-
-        console.log(
-          `📈 Stats: ${stats.knownTokens} known, ${
-            stats.unknownTokens
-          } unknown (${Math.round(
-            (stats.knownTokens / stats.totalTokens) * 100
-          )}% knowledge)`
-        );
-
-        // Count frequency of unknown words on current page
-        stats.mostCommon.clear();
-        textNodes.forEach((textNode) => {
-          const text = textNode.data;
-          try {
-            const segments = segmenter.segment(text);
-            for (const segment of segments) {
-              if (segment.isWordLike) {
-                const token = segment.segment.trim();
-                if (unknownSet.has(token)) {
-                  const count = stats.mostCommon.get(token) || 0;
-                  stats.mostCommon.set(token, count + 1);
-                }
-              }
-            }
-          } catch (error) {
-            // Ignore segmentation errors
-          }
-        });
-
-        // Set flag to prevent observer from triggering during our changes
-        isModifyingDOM = true;
-
-        console.log("🎨 Starting to highlight unknown words...");
-
-        // Process each text node (now async)
-        let highlightedWords = 0;
-        for (const textNode of textNodes) {
-          const highlighted = await wrapUnknown(textNode, unknownSet);
-          highlightedWords += highlighted;
-        }
-
-        console.log(`✨ Highlighted ${highlightedWords} word instances`);
-
-        // Clear flag after DOM modifications are complete
-        setTimeout(() => {
-          isModifyingDOM = false;
-        }, 100);
-
-        // Update UI
-        createStatsOverlay();
-        updateStatsOverlay();
-      } else {
-        console.error("❌ Invalid response from background script:", response);
-      }
+  chrome.runtime.sendMessage(message, (response: TokensResponse) => {
+    if (chrome.runtime.lastError) {
+      console.error("❌ Error sending message:", chrome.runtime.lastError);
+      return;
     }
-  );
+
+    if (response && response.unknown) {
+      const unknownSet = new Set(response.unknown);
+
+      console.log(
+        `📥 Received response: ${response.unknown.length} unknown words out of ${tokens.size} total`
+      );
+      console.log(`❓ Sample unknown words:`, response.unknown.slice(0, 10));
+
+      // Update stats for current page
+      stats.totalTokens = tokens.size;
+      stats.unknownTokens = response.unknown.length;
+      stats.knownTokens = tokens.size - response.unknown.length;
+      stats.lastUpdate = new Date();
+
+      console.log(
+        `📈 Stats: ${stats.knownTokens} known, ${
+          stats.unknownTokens
+        } unknown (${Math.round(
+          (stats.knownTokens / stats.totalTokens) * 100
+        )}% knowledge)`
+      );
+
+      // Set flag to prevent observer from triggering during our changes
+      isModifyingDOM = true;
+
+      console.log("🎨 Starting to highlight unknown words...");
+
+      // Process each text node
+      let highlightedWords = 0;
+      textNodes.forEach((textNode) => {
+        const highlighted = wrapUnknown(textNode, unknownSet);
+        highlightedWords += highlighted;
+      });
+
+      console.log(`✨ Highlighted ${highlightedWords} word instances`);
+
+      // Clear flag after DOM modifications are complete
+      setTimeout(() => {
+        isModifyingDOM = false;
+      }, 100);
+
+      // Update UI
+      createStatsOverlay();
+      updateStatsOverlay();
+    } else {
+      console.error("❌ Invalid response from background script:", response);
+    }
+  });
 }
 
-async function wrapUnknown(
-  textNode: Text,
-  unknownWords: Set<string>
-): Promise<number> {
+function wrapUnknown(textNode: Text, unknownWords: Set<string>): number {
   if (!segmenter) return 0;
 
   const text = textNode.data;
@@ -605,14 +407,14 @@ async function wrapUnknown(
 
     for (const segment of segments) {
       if (segment.isWordLike && unknownWords.has(segment.segment.trim())) {
-        const word = segment.segment.trim();
-        // Get frequency rank for styling
-        const rank = await getCachedFrequencyRank(word);
         // Wrap unknown word in span with frequency-based styling
         const span = document.createElement("span");
-        span.className = `${CLS} ${getFrequencyClass(rank)}`;
+        span.className = CLS;
         span.textContent = segment.segment;
-        addTooltipToSpan(span, word);
+
+        // Apply frequency-based coloring
+        applyFrequencyColoring(span, segment.segment.trim());
+
         fragment.appendChild(span);
         highlightedCount++;
       } else {
@@ -630,32 +432,57 @@ async function wrapUnknown(
   }
 }
 
-// Initial scan setup
-async function initializeScanning(): Promise<void> {
-  console.log("Initializing Anki Highlighter...");
-
+// Apply frequency-based coloring and tooltip to a word element
+async function applyFrequencyColoring(
+  element: HTMLElement,
+  word: string
+): Promise<void> {
   try {
-    // Load frequency data first
-    await initializeFrequencyDB();
-    console.log("Frequency data loaded successfully");
+    // Check cache first
+    let frequency = pageFrequencyCache.get(word);
 
-    // Create stats overlay immediately
-    createStatsOverlay();
-
-    // Single initial scan
-    scan();
-  } catch (error) {
-    console.error("Error initializing Anki Highlighter:", error);
-
-    // Create stats overlay anyway
-    createStatsOverlay();
-
-    // Update status to show error
-    const statusEl = document.querySelector("#status");
-    if (statusEl) {
-      statusEl.textContent = "Error loading data";
-      statusEl.className = "unknown-value";
+    if (frequency === undefined) {
+      // Look up frequency (this is cached in frequency-db)
+      frequency = await getFrequencyRank(word);
+      pageFrequencyCache.set(word, frequency);
     }
+
+    // Get colors based on frequency
+    const colors = getColorForFrequency(frequency, settings.colorIntensity);
+
+    // Apply styling
+    element.style.color = colors.color;
+    element.style.backgroundColor = colors.bgColor;
+
+    // Create tooltip text
+    let tooltipText = `Unknown word: ${word}`;
+    if (frequency !== null) {
+      tooltipText += `\nFrequency rank: #${frequency.toLocaleString()}`;
+
+      // Add frequency category
+      if (frequency <= 100) {
+        tooltipText += " (Very Common)";
+      } else if (frequency <= 500) {
+        tooltipText += " (Common)";
+      } else if (frequency <= 2000) {
+        tooltipText += " (Uncommon)";
+      } else if (frequency <= 10000) {
+        tooltipText += " (Rare)";
+      } else {
+        tooltipText += " (Very Rare)";
+      }
+    } else {
+      tooltipText += "\nNot found in frequency database";
+    }
+
+    if (settings.showTooltips) {
+      element.title = tooltipText;
+    }
+  } catch (error) {
+    console.warn(`❌ Error applying frequency coloring for "${word}":`, error);
+    // Fallback to yellow highlighting
+    element.style.backgroundColor = "rgba(255, 255, 0, 0.3)";
+    element.title = `Unknown word: ${word}`;
   }
 }
 
@@ -684,12 +511,48 @@ function checkExtensionContext(): boolean {
 }
 
 // Initialize immediately based on document state
+async function startExtension(): Promise<void> {
+  console.log("🚀 Initializing Anki Highlighter...");
+
+  // Initialize frequency database and settings first
+  await initializeExtension();
+
+  // Then start scanning
+  scan();
+}
+
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initializeScanning);
+  document.addEventListener("DOMContentLoaded", () => {
+    startExtension();
+  });
 } else {
   // Document is already loaded
-  initializeScanning();
+  startExtension();
 }
+
+// Listen for settings changes
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === "sync") {
+    console.log("⚙️ Settings changed, reloading...");
+    loadSettings()
+      .then((newSettings) => {
+        settings = newSettings;
+        console.log("✅ Settings reloaded:", settings);
+
+        // Re-apply coloring to existing highlighted words
+        const highlightedWords = document.querySelectorAll(`.${CLS}`);
+        highlightedWords.forEach((element) => {
+          const word = element.textContent?.trim();
+          if (word) {
+            applyFrequencyColoring(element as HTMLElement, word);
+          }
+        });
+      })
+      .catch((error) => {
+        console.warn("❌ Failed to reload settings:", error);
+      });
+  }
+});
 
 // MutationObserver with better filtering to prevent self-triggering
 const observer = new MutationObserver((mutations) => {
@@ -710,9 +573,7 @@ const observer = new MutationObserver((mutations) => {
           if (
             element.classList?.contains(CLS) ||
             element.classList?.contains("anki-stats") ||
-            element.classList?.contains("anki-tooltip") ||
-            element.closest(".anki-stats") ||
-            element.closest(".anki-tooltip")
+            element.closest(".anki-stats")
           ) {
             continue;
           }

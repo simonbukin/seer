@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Anki Highlighter Test</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        line-height: 1.8;
+      }
+
+      .test-text {
+        font-size: 20px;
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        background: #f9f9f9;
+      }
+
+      .instructions {
+        background: #e8f5e8;
+        padding: 15px;
+        border-radius: 6px;
+        margin: 20px 0;
+      }
+
+      .debug-info {
+        background: #fff3cd;
+        padding: 15px;
+        border-radius: 6px;
+        margin: 20px 0;
+        font-family: monospace;
+        font-size: 12px;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .controls {
+        text-align: center;
+        margin: 20px 0;
+      }
+
+      button {
+        background: #4caf50;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin: 5px;
+      }
+
+      button:hover {
+        background: #45a049;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🧪 Simple Anki Highlighter Test</h1>
+
+    <div class="instructions">
+      <h3>Test Instructions:</h3>
+      <ol>
+        <li>
+          <strong>Load Extension:</strong> Load the unpacked extension from the
+          `dist/` directory
+        </li>
+        <li>
+          <strong>Check Console:</strong> Open F12 and look for initialization
+          logs
+        </li>
+        <li>
+          <strong>Context Menu:</strong> Right-click the extension icon to
+          access options
+        </li>
+        <li>
+          <strong>Highlighting:</strong> Unknown Japanese words should be
+          highlighted in yellow
+        </li>
+        <li>
+          <strong>Stats:</strong> Look for the stats overlay in the top-left
+          corner
+        </li>
+      </ol>
+    </div>
+
+    <div class="controls">
+      <button id="testColorIntensityBtn">🎨 Test Color Intensity</button>
+      <button id="openOptionsBtn">⚙️ Open Options</button>
+      <button id="clearDebugBtn">🗑️ Clear Debug</button>
+    </div>
+
+    <div class="debug-info" id="debugInfo">
+      <strong>Debug Log:</strong><br />
+      Page loaded. Waiting for extension...<br />
+    </div>
+
+    <div class="test-text">
+      <strong>Basic Japanese Text:</strong><br />
+      私 は 学生 です。今日 は 良い 天気 です。
+    </div>
+
+    <div class="test-text">
+      <strong>More Japanese Text:</strong><br />
+      漫画 を 読む の が 好き です。映画 も 面白い です。
+    </div>
+
+    <div class="test-text">
+      <strong>Mixed Content:</strong><br />
+      Hello world! 日本語 を 勉強 して います。Good luck!
+    </div>
+
+    <script>
+      let debugLog = [];
+
+      function log(message) {
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = `[${timestamp}] ${message}`;
+        debugLog.push(logEntry);
+
+        const debugDiv = document.getElementById("debugInfo");
+        debugDiv.innerHTML =
+          "<strong>Debug Log:</strong><br />" +
+          debugLog.slice(-10).join("<br />"); // Show last 10 entries
+
+        console.log(`[Simple Test] ${message}`);
+      }
+
+      function clearDebug() {
+        debugLog = [];
+        document.getElementById("debugInfo").innerHTML =
+          "<strong>Debug Log:</strong><br />Logs cleared.";
+      }
+
+      function openOptions() {
+        try {
+          chrome.runtime.openOptionsPage();
+          log("✅ Opened options page");
+        } catch (error) {
+          log(`❌ Failed to open options: ${error.message}`);
+        }
+      }
+
+      function testColorIntensity() {
+        log("🎨 Testing color intensity...");
+
+        // Get current settings
+        chrome.storage.sync.get(["colorIntensity"], (result) => {
+          const intensity = result.colorIntensity || 0.7;
+          log(`Current color intensity: ${intensity}`);
+
+          // Test different intensities
+          const testIntensities = [0.3, 0.5, 0.7, 1.0];
+          let index = 0;
+
+          const testNext = () => {
+            if (index < testIntensities.length) {
+              const testIntensity = testIntensities[index];
+              chrome.storage.sync.set({ colorIntensity: testIntensity }, () => {
+                log(`Set intensity to: ${testIntensity}`);
+                index++;
+                setTimeout(testNext, 2000); // Wait 2 seconds between tests
+              });
+            } else {
+              // Restore original intensity
+              chrome.storage.sync.set({ colorIntensity: intensity }, () => {
+                log(`Restored original intensity: ${intensity}`);
+                log("✅ Color intensity test completed");
+              });
+            }
+          };
+
+          testNext();
+        });
+      }
+
+      log("🧪 Simple test page loaded");
+
+      // Check for extension activity after 3 seconds
+      setTimeout(() => {
+        const highlightedWords = document.querySelectorAll(".anki-unknown");
+        log(`Found ${highlightedWords.length} highlighted words`);
+
+        if (highlightedWords.length > 0) {
+          log("✅ Extension is working!");
+
+          // Analyze colors
+          highlightedWords.forEach((word, index) => {
+            if (index < 3) {
+              // Only log first 3
+              const styles = window.getComputedStyle(word);
+              const bgColor = styles.backgroundColor;
+              log(`"${word.textContent}": ${bgColor}`);
+            }
+          });
+        } else {
+          log("❌ No highlighted words found");
+          log("Possible issues:");
+          log("- Extension not loaded");
+          log("- AnkiConnect not running");
+          log("- All words are known in your deck");
+        }
+
+        const statsOverlay = document.querySelector(".anki-stats");
+        if (statsOverlay) {
+          log("✅ Stats overlay found");
+        } else {
+          log("❌ Stats overlay not found");
+        }
+      }, 3000);
+
+      // Test extension context
+      setTimeout(() => {
+        try {
+          chrome.runtime.getURL("");
+          log("✅ Extension context valid");
+        } catch (error) {
+          log("❌ Extension context invalid");
+        }
+      }, 1000);
+
+      // Add event listeners after DOM is loaded
+      document.addEventListener("DOMContentLoaded", () => {
+        document
+          .getElementById("testColorIntensityBtn")
+          .addEventListener("click", testColorIntensity);
+        document
+          .getElementById("openOptionsBtn")
+          .addEventListener("click", openOptions);
+        document
+          .getElementById("clearDebugBtn")
+          .addEventListener("click", clearDebug);
+      });
+    </script>
+  </body>
+</html>

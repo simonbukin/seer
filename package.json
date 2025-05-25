@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@types/dexie": "^1.3.32",
-    "dexie": "^4.0.11"
+    "dexie": "^4.0.11",
+    "tippy.js": "^6.3.7"
   }
 }
