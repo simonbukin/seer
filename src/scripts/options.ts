@@ -1,4 +1,5 @@
 import { getFrequencyStats, refreshFrequencyData } from "./frequency-db";
+import { HighlightStyle, GradientColors } from "./types";
 
 interface Settings {
   primaryDeck: string;
@@ -6,6 +7,9 @@ interface Settings {
   ignoredDeck: string;
   colorIntensity: number;
   showStats: boolean;
+  highlightStyle: HighlightStyle;
+  gradientColors: GradientColors;
+  customCSS: string;
 }
 
 // Default settings
@@ -15,6 +19,12 @@ const defaultSettings: Settings = {
   ignoredDeck: "",
   colorIntensity: 0.7,
   showStats: true,
+  highlightStyle: "underline",
+  gradientColors: {
+    startColor: "#00ff00",
+    endColor: "#ff0000",
+  },
+  customCSS: "",
 };
 
 // AnkiConnect helper
@@ -225,11 +235,31 @@ async function initializeOptions(): Promise<void> {
   (document.getElementById("ignoredDeck") as HTMLSelectElement).value =
     settings.ignoredDeck;
 
-  // Set other form fields
+  // Set display settings form fields
   (document.getElementById("colorIntensity") as HTMLInputElement).value =
     settings.colorIntensity.toString();
   (document.getElementById("showStats") as HTMLInputElement).checked =
     settings.showStats;
+  (document.getElementById("highlightStyle") as HTMLSelectElement).value =
+    settings.highlightStyle;
+  (document.getElementById("startColor") as HTMLInputElement).value =
+    settings.gradientColors.startColor;
+  (document.getElementById("endColor") as HTMLInputElement).value =
+    settings.gradientColors.endColor;
+  (document.getElementById("customCSS") as HTMLTextAreaElement).value =
+    settings.customCSS;
+
+  // Update color intensity display
+  const colorIntensityValue = document.getElementById("colorIntensityValue");
+  if (colorIntensityValue) {
+    colorIntensityValue.textContent = settings.colorIntensity.toString();
+  }
+
+  // Show/hide custom CSS based on highlight style
+  updateCustomCSSVisibility();
+
+  // Update preview
+  updateStylePreview();
 
   // Load frequency stats
   await loadFrequencyStats();
@@ -240,6 +270,144 @@ async function initializeOptions(): Promise<void> {
     (document.getElementById("wordField") as HTMLSelectElement).value =
       settings.wordField;
   }
+}
+
+// Update custom CSS visibility based on highlight style
+function updateCustomCSSVisibility(): void {
+  const highlightStyle = (
+    document.getElementById("highlightStyle") as HTMLSelectElement
+  ).value;
+  const customCSSGroup = document.getElementById("customCSSGroup");
+  if (customCSSGroup) {
+    customCSSGroup.style.display =
+      highlightStyle === "custom" ? "block" : "none";
+  }
+}
+
+// Update style preview
+function updateStylePreview(): void {
+  const highlightStyle = (
+    document.getElementById("highlightStyle") as HTMLSelectElement
+  ).value as HighlightStyle;
+  const colorIntensity = parseFloat(
+    (document.getElementById("colorIntensity") as HTMLInputElement).value
+  );
+  const startColor = (document.getElementById("startColor") as HTMLInputElement)
+    .value;
+  const endColor = (document.getElementById("endColor") as HTMLInputElement)
+    .value;
+  const customCSS = (
+    document.getElementById("customCSS") as HTMLTextAreaElement
+  ).value;
+
+  const previewWord1 = document.getElementById("previewWord1");
+  const previewWord2 = document.getElementById("previewWord2");
+
+  if (previewWord1 && previewWord2) {
+    // Simulate common word (frequency 100) and rare word (frequency 10000)
+    const commonColors = getPreviewColors(
+      100,
+      startColor,
+      endColor,
+      colorIntensity
+    );
+    const rareColors = getPreviewColors(
+      10000,
+      startColor,
+      endColor,
+      colorIntensity
+    );
+
+    applyPreviewStyle(previewWord1, commonColors, highlightStyle, customCSS);
+    applyPreviewStyle(previewWord2, rareColors, highlightStyle, customCSS);
+  }
+}
+
+// Get preview colors for a given frequency
+function getPreviewColors(
+  frequency: number,
+  startColor: string,
+  endColor: string,
+  intensity: number
+): { color: string; bgColor: string } {
+  const logFreq = Math.log10(frequency);
+  const minLog = Math.log10(1);
+  const maxLog = Math.log10(500000);
+  const normalizedFreq = Math.min(
+    1.0,
+    Math.max(0.0, (logFreq - minLog) / (maxLog - minLog))
+  );
+
+  const startRgb = hexToRgb(startColor);
+  const endRgb = hexToRgb(endColor);
+
+  if (!startRgb || !endRgb) {
+    return { color: "#333333", bgColor: "rgba(128, 128, 128, 0.15)" };
+  }
+
+  const r = Math.round(startRgb.r + (endRgb.r - startRgb.r) * normalizedFreq);
+  const g = Math.round(startRgb.g + (endRgb.g - startRgb.g) * normalizedFreq);
+  const b = Math.round(startRgb.b + (endRgb.b - startRgb.b) * normalizedFreq);
+
+  return {
+    color: `rgb(${r}, ${g}, ${b})`,
+    bgColor: `rgba(${r}, ${g}, ${b}, ${intensity * 0.2})`,
+  };
+}
+
+// Apply preview style to element
+function applyPreviewStyle(
+  element: HTMLElement,
+  colors: { color: string; bgColor: string },
+  style: HighlightStyle,
+  customCSS: string
+): void {
+  // Reset styles
+  element.style.backgroundColor = "";
+  element.style.color = "";
+  element.style.textDecoration = "";
+  element.style.borderBottom = "";
+  element.style.cssText = "";
+
+  switch (style) {
+    case "highlight":
+      element.style.backgroundColor = colors.bgColor;
+      element.style.color = colors.color;
+      break;
+
+    case "underline":
+      element.style.textDecoration = "none";
+      element.style.borderBottom = `2px solid ${colors.color}`;
+      break;
+
+    case "color":
+      element.style.color = colors.color;
+      break;
+
+    case "custom":
+      if (customCSS) {
+        const processedCSS = customCSS
+          .replace(/\$\{color\}/g, colors.color)
+          .replace(/\$\{bgColor\}/g, colors.bgColor);
+        element.style.cssText = processedCSS;
+      } else {
+        element.style.backgroundColor = colors.bgColor;
+        element.style.color = colors.color;
+      }
+      break;
+  }
+}
+
+// Helper function to convert hex to RGB
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16),
+      }
+    : null;
 }
 
 // Event listeners
@@ -287,14 +455,58 @@ document.addEventListener("DOMContentLoaded", () => {
       const showStats = (
         document.getElementById("showStats") as HTMLInputElement
       ).checked;
+      const highlightStyle = (
+        document.getElementById("highlightStyle") as HTMLSelectElement
+      ).value as HighlightStyle;
+      const startColor = (
+        document.getElementById("startColor") as HTMLInputElement
+      ).value;
+      const endColor = (document.getElementById("endColor") as HTMLInputElement)
+        .value;
+      const customCSS = (
+        document.getElementById("customCSS") as HTMLTextAreaElement
+      ).value;
 
-      await saveSettings({ colorIntensity, showStats });
+      await saveSettings({
+        colorIntensity,
+        showStats,
+        highlightStyle,
+        gradientColors: { startColor, endColor },
+        customCSS,
+      });
       showStatus(
         "displayStatus",
         "Display settings saved successfully",
         "success"
       );
     });
+
+  // Highlight style change handler
+  document.getElementById("highlightStyle")?.addEventListener("change", () => {
+    updateCustomCSSVisibility();
+    updateStylePreview();
+  });
+
+  // Color intensity slider real-time update
+  document.getElementById("colorIntensity")?.addEventListener("input", (e) => {
+    const value = (e.target as HTMLInputElement).value;
+    const valueDisplay = document.getElementById("colorIntensityValue");
+    if (valueDisplay) {
+      valueDisplay.textContent = value;
+    }
+    updateStylePreview();
+  });
+
+  // Gradient color change handlers
+  document
+    .getElementById("startColor")
+    ?.addEventListener("change", updateStylePreview);
+  document
+    .getElementById("endColor")
+    ?.addEventListener("change", updateStylePreview);
+  document
+    .getElementById("customCSS")
+    ?.addEventListener("input", updateStylePreview);
 
   // Refresh frequency data
   document
@@ -353,14 +565,5 @@ document.addEventListener("DOMContentLoaded", () => {
   // Export frequency data
   document.getElementById("exportFrequency")?.addEventListener("click", () => {
     showStatus("frequencyStatus", "Export functionality coming soon", "info");
-  });
-
-  // Color intensity slider real-time update
-  document.getElementById("colorIntensity")?.addEventListener("input", (e) => {
-    const value = (e.target as HTMLInputElement).value;
-    const valueDisplay = document.getElementById("colorIntensityValue");
-    if (valueDisplay) {
-      valueDisplay.textContent = value;
-    }
   });
 });

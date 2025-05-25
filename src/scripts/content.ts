@@ -1,8 +1,15 @@
-import { TokensMessage, TokensResponse } from "./types";
+import {
+  TokensMessage,
+  TokensResponse,
+  HighlightStyle,
+  GradientColors,
+} from "./types";
 import {
   initializeFrequencyDB,
   getFrequencyRank,
   getColorForFrequency,
+  getColorFromGradient,
+  applyHighlightStyle,
   loadSettings,
 } from "./frequency-db";
 
@@ -37,6 +44,12 @@ let segmenter: Intl.Segmenter;
 let settings = {
   colorIntensity: 0.7,
   showStats: true,
+  highlightStyle: "underline" as HighlightStyle,
+  gradientColors: {
+    startColor: "#00ff00",
+    endColor: "#ff0000",
+  } as GradientColors,
+  customCSS: "",
 };
 
 // Frequency cache for current page words
@@ -103,39 +116,93 @@ style.textContent = `
     filter: brightness(1.1) !important;
   }
 
-  .anki-stats {
+  .anki-stats-toggle {
     position: fixed;
     top: 10px;
     left: 10px;
-    background: rgba(0, 0, 0, 0.85);
+    width: 40px;
+    height: 40px;
+    background: rgba(0, 0, 0, 0.8);
     color: white;
-    padding: 12px;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .anki-stats-toggle:hover {
+    background: rgba(0, 0, 0, 0.9);
+    transform: scale(1.1);
+  }
+
+  .anki-stats {
+    position: fixed;
+    top: 60px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 15px;
     border-radius: 8px;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 11px;
     line-height: 1.4;
     z-index: 9999;
-    min-width: 200px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    min-width: 220px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     transition: all 0.3s ease;
+    opacity: 0;
+    transform: translateY(-10px);
+    pointer-events: none;
   }
   
-  .anki-stats.collapsed {
-    transform: translateX(-200px);
+  .anki-stats.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
   }
   
   .anki-stats .title {
     font-weight: bold;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     color: #ffeb3b;
     border-bottom: 1px solid #333;
-    padding-bottom: 4px;
+    padding-bottom: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .anki-stats .close-btn {
+    background: none;
+    border: none;
+    color: #ccc;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+  }
+
+  .anki-stats .close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
   }
   
   .anki-stats .stat-row {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 2px;
+    margin-bottom: 3px;
   }
   
   .anki-stats .stat-label {
@@ -150,37 +217,32 @@ style.textContent = `
   .anki-stats .unknown-value {
     color: #ff5722;
   }
-  
-  .anki-stats .toggle {
-    position: absolute;
-    right: -20px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 20px;
-    height: 40px;
-    background: rgba(0, 0, 0, 0.85);
-    border-radius: 0 8px 8px 0;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 12px;
-  }
 `;
 document.head.appendChild(style);
 
 // Create stats overlay
 let statsOverlay: HTMLElement | null = null;
+let statsToggle: HTMLElement | null = null;
+let statsVisible = false;
 
 function createStatsOverlay(): void {
-  if (statsOverlay) return;
+  if (statsToggle) return;
 
+  // Create toggle button
+  statsToggle = document.createElement("button");
+  statsToggle.className = "anki-stats-toggle";
+  statsToggle.innerHTML = "🗾";
+  statsToggle.title = "Toggle Anki Highlighter Stats (Ctrl+Shift+S)";
+
+  // Create stats panel
   statsOverlay = document.createElement("div");
   statsOverlay.className = "anki-stats";
 
   statsOverlay.innerHTML = `
-    <div class="title">🗾 Anki Highlighter</div>
+    <div class="title">
+      🗾 Anki Highlighter
+      <button class="close-btn" title="Close">×</button>
+    </div>
     <div class="stat-row">
       <span class="stat-label">Total tokens:</span>
       <span class="stat-value" id="total-tokens">0</span>
@@ -201,19 +263,75 @@ function createStatsOverlay(): void {
       <span class="stat-label">Status:</span>
       <span class="anki-loading" id="status">Loading data...</span>
     </div>
-    <div class="toggle">◀</div>
+    <div style="margin-top: 8px; font-size: 10px; color: #999; text-align: center;">
+      Press Ctrl+Shift+S to toggle
+    </div>
   `;
 
+  document.body.appendChild(statsToggle);
   document.body.appendChild(statsOverlay);
 
-  // Add toggle functionality
-  const toggle = statsOverlay.querySelector(".toggle")!;
-  toggle.addEventListener("click", () => {
-    statsOverlay!.classList.toggle("collapsed");
-    toggle.textContent = statsOverlay!.classList.contains("collapsed")
-      ? "▶"
-      : "◀";
+  // Add event listeners
+  statsToggle.addEventListener("click", toggleStats);
+
+  const closeBtn = statsOverlay.querySelector(".close-btn")!;
+  closeBtn.addEventListener("click", hideStats);
+
+  // Auto-hide after 10 seconds of no interaction
+  let autoHideTimeout: number | null = null;
+
+  const resetAutoHide = () => {
+    if (autoHideTimeout) {
+      clearTimeout(autoHideTimeout);
+    }
+    if (statsVisible) {
+      autoHideTimeout = window.setTimeout(() => {
+        hideStats();
+      }, 10000);
+    }
+  };
+
+  statsOverlay.addEventListener("mouseenter", () => {
+    if (autoHideTimeout) {
+      clearTimeout(autoHideTimeout);
+      autoHideTimeout = null;
+    }
   });
+
+  statsOverlay.addEventListener("mouseleave", resetAutoHide);
+
+  // Show/hide based on settings
+  if (settings.showStats) {
+    statsToggle.style.display = "flex";
+  } else {
+    statsToggle.style.display = "none";
+  }
+}
+
+function toggleStats(): void {
+  if (statsVisible) {
+    hideStats();
+  } else {
+    showStats();
+  }
+}
+
+function showStats(): void {
+  if (statsOverlay) {
+    statsVisible = true;
+    statsOverlay.classList.add("visible");
+
+    // Trigger auto-hide
+    const mouseLeaveEvent = new Event("mouseleave");
+    statsOverlay.dispatchEvent(mouseLeaveEvent);
+  }
+}
+
+function hideStats(): void {
+  if (statsOverlay) {
+    statsVisible = false;
+    statsOverlay.classList.remove("visible");
+  }
 }
 
 function updateStatsOverlay(): void {
@@ -238,6 +356,24 @@ function updateStatsOverlay(): void {
   // Update status
   statusEl.textContent = `Updated ${stats.lastUpdate.toLocaleTimeString()}`;
   statusEl.className = "stat-value";
+}
+
+// Function to re-apply highlighting with new settings
+async function reapplyHighlighting(): Promise<void> {
+  console.log("🎨 Re-applying highlighting with new settings...");
+
+  const highlightedWords = document.querySelectorAll(`.${CLS}`);
+
+  // Use Promise.all to handle all async operations properly
+  const promises = Array.from(highlightedWords).map(async (element) => {
+    const word = element.textContent?.trim();
+    if (word) {
+      await applyFrequencyColoring(element as HTMLElement, word);
+    }
+  });
+
+  await Promise.all(promises);
+  console.log(`✅ Re-applied highlighting to ${highlightedWords.length} words`);
 }
 
 // Flag to prevent scanning during our own DOM modifications
@@ -322,7 +458,6 @@ function scan(root: Node = document.body): void {
 
   if (tokens.size === 0) {
     console.log("⚠️ No Japanese tokens found");
-    createStatsOverlay();
     updateStatsOverlay();
     return;
   }
@@ -380,7 +515,6 @@ function scan(root: Node = document.body): void {
       }, 100);
 
       // Update UI
-      createStatsOverlay();
       updateStatsOverlay();
     } else {
       console.error("❌ Invalid response from background script:", response);
@@ -446,12 +580,28 @@ async function applyFrequencyColoring(
       pageFrequencyCache.set(word, frequency);
     }
 
-    // Get colors based on frequency
-    const colors = getColorForFrequency(frequency, settings.colorIntensity);
+    // Get colors based on frequency and gradient settings
+    let colors;
+    if (
+      settings.gradientColors.startColor &&
+      settings.gradientColors.endColor
+    ) {
+      colors = getColorFromGradient(
+        frequency,
+        settings.gradientColors,
+        settings.colorIntensity
+      );
+    } else {
+      colors = getColorForFrequency(frequency, settings.colorIntensity);
+    }
 
-    // Apply styling
-    element.style.color = colors.color;
-    element.style.backgroundColor = colors.bgColor;
+    // Apply the selected highlight style
+    applyHighlightStyle(
+      element,
+      colors,
+      settings.highlightStyle,
+      settings.customCSS
+    );
   } catch (error) {
     console.warn(`❌ Error applying frequency coloring for "${word}":`, error);
     // Fallback to yellow highlighting
@@ -490,6 +640,9 @@ async function startExtension(): Promise<void> {
   // Initialize frequency database and settings first
   await initializeExtension();
 
+  // Create stats overlay (respects showStats setting)
+  createStatsOverlay();
+
   // Then start scanning
   scan();
 }
@@ -508,18 +661,34 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === "sync") {
     console.log("⚙️ Settings changed, reloading...");
     loadSettings()
-      .then((newSettings) => {
+      .then(async (newSettings) => {
+        const oldSettings = { ...settings };
         settings = newSettings;
         console.log("✅ Settings reloaded:", settings);
 
-        // Re-apply coloring to existing highlighted words
-        const highlightedWords = document.querySelectorAll(`.${CLS}`);
-        highlightedWords.forEach((element) => {
-          const word = element.textContent?.trim();
-          if (word) {
-            applyFrequencyColoring(element as HTMLElement, word);
+        // Update stats overlay visibility
+        if (statsToggle) {
+          if (settings.showStats) {
+            statsToggle.style.display = "flex";
+          } else {
+            statsToggle.style.display = "none";
+            hideStats(); // Hide if currently visible
           }
-        });
+        }
+
+        // Re-apply highlighting if color-related settings changed
+        if (
+          oldSettings.colorIntensity !== settings.colorIntensity ||
+          oldSettings.highlightStyle !== settings.highlightStyle ||
+          oldSettings.gradientColors.startColor !==
+            settings.gradientColors.startColor ||
+          oldSettings.gradientColors.endColor !==
+            settings.gradientColors.endColor ||
+          oldSettings.customCSS !== settings.customCSS
+        ) {
+          console.log("🎨 Color settings changed, re-applying highlighting...");
+          await reapplyHighlighting();
+        }
       })
       .catch((error) => {
         console.warn("❌ Failed to reload settings:", error);
@@ -577,4 +746,15 @@ const observer = new MutationObserver((mutations) => {
 observer.observe(document.body, {
   childList: true,
   subtree: true,
+});
+
+// Add keyboard shortcut for toggling stats
+document.addEventListener("keydown", (event) => {
+  // Ctrl/Cmd + Shift + S to toggle stats
+  if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === "S") {
+    event.preventDefault();
+    if (settings.showStats && statsToggle) {
+      toggleStats();
+    }
+  }
 });

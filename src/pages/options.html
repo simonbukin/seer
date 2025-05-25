@@ -201,6 +201,73 @@
         font-weight: bold;
         color: #4caf50;
       }
+
+      .color-input-group {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        margin-top: 5px;
+      }
+
+      .color-input-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .color-input-item label {
+        font-size: 12px;
+        margin-bottom: 3px;
+        text-align: center;
+      }
+
+      .color-input-item input[type="color"] {
+        width: 60px;
+        height: 40px;
+        padding: 0;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      .gradient-arrow {
+        color: #666;
+        font-size: 14px;
+        margin-top: 15px;
+      }
+
+      #stylePreview {
+        padding: 10px;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        background: #fafafa;
+        font-family: serif;
+        font-size: 16px;
+        line-height: 1.6;
+      }
+
+      #stylePreview span {
+        margin: 0 2px;
+        transition: all 0.2s ease;
+      }
+
+      .custom-css-textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+        font-size: 12px;
+        resize: vertical;
+        background: #f8f8f8;
+      }
+
+      .custom-css-textarea:focus {
+        outline: none;
+        border-color: #4caf50;
+        box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+        background: white;
+      }
     </style>
   </head>
   <body>
@@ -281,6 +348,19 @@
         <h2>🎨 Display Settings</h2>
 
         <div class="form-group">
+          <label for="highlightStyle">Highlight Style:</label>
+          <select id="highlightStyle">
+            <option value="highlight">Highlight (Background)</option>
+            <option value="underline" selected>Underline</option>
+            <option value="color">Text Color Only</option>
+            <option value="custom">Custom CSS</option>
+          </select>
+          <div class="help-text">
+            Choose how unknown words should be highlighted
+          </div>
+        </div>
+
+        <div class="form-group">
           <label for="colorIntensity">Color Intensity:</label>
           <input
             type="range"
@@ -298,10 +378,63 @@
         </div>
 
         <div class="form-group">
+          <label>Gradient Colors:</label>
+          <div class="color-input-group">
+            <div class="color-input-item">
+              <label for="startColor">Common words:</label>
+              <input type="color" id="startColor" value="#00ff00" />
+            </div>
+            <div class="gradient-arrow">→</div>
+            <div class="color-input-item">
+              <label for="endColor">Rare words:</label>
+              <input type="color" id="endColor" value="#ff0000" />
+            </div>
+          </div>
+          <div class="help-text">
+            Choose colors for the frequency gradient (common → rare)
+          </div>
+        </div>
+
+        <div class="form-group" id="customCSSGroup" style="display: none">
+          <label for="customCSS">Custom CSS:</label>
+          <textarea
+            id="customCSS"
+            rows="4"
+            placeholder="color: ${color}; background-color: ${bgColor}; border: 1px solid ${color};"
+            class="custom-css-textarea"
+          ></textarea>
+          <div class="help-text">
+            Use ${color} and ${bgColor} as placeholders for frequency-based
+            colors
+          </div>
+        </div>
+
+        <div class="form-group">
           <label>
             <input type="checkbox" id="showStats" checked /> Show statistics
             overlay
           </label>
+        </div>
+
+        <div class="form-group">
+          <label>Preview:</label>
+          <div
+            id="stylePreview"
+            style="
+              padding: 10px;
+              border: 1px solid #e0e0e0;
+              border-radius: 4px;
+              background: #fafafa;
+              font-family: serif;
+              font-size: 16px;
+            "
+          >
+            これは<span id="previewWord1" style="margin: 0 2px">テスト</span
+            >の<span id="previewWord2" style="margin: 0 2px">文章</span>です。
+          </div>
+          <div class="help-text">
+            Preview of how highlighting will appear on Japanese text
+          </div>
         </div>
 
         <button id="saveDisplaySettings" class="secondary">
