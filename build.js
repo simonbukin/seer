@@ -5,10 +5,10 @@ const path = require("path");
 // Build configuration
 const buildConfig = {
   entryPoints: [
-    "src/background.ts",
-    "src/content.ts",
-    "src/popup.ts",
-    "src/options.ts",
+    "src/scripts/background.ts",
+    "src/scripts/content.ts",
+    "src/scripts/popup.ts",
+    "src/scripts/options.ts",
   ],
   bundle: true,
   outdir: "dist",
@@ -31,13 +31,12 @@ async function build() {
     // Build TypeScript files
     await esbuild.build(buildConfig);
 
-    // Copy static files
+    // Copy static files from src/
     const staticFiles = [
-      { src: "manifest.json", dest: "dist/manifest.json" },
-      { src: "src/popup.html", dest: "dist/popup.html" },
-      { src: "src/options.html", dest: "dist/options.html" },
-      { src: "test-unified.html", dest: "dist/test-unified.html" },
-      { src: "public/icon.png", dest: "dist/icon.png" },
+      { src: "src/manifest.json", dest: "dist/manifest.json" },
+      { src: "src/pages/popup.html", dest: "dist/popup.html" },
+      { src: "src/pages/options.html", dest: "dist/options.html" },
+      { src: "src/assets/icon.png", dest: "dist/icon.png" },
     ];
 
     for (const file of staticFiles) {

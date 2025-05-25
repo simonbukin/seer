@@ -16,7 +16,6 @@ interface Settings {
   wordField: string;
   ignoredDeck: string;
   colorIntensity: number;
-  showTooltips: boolean;
   showStats: boolean;
 }
 
@@ -28,7 +27,6 @@ async function loadSettings(): Promise<Settings> {
       wordField: "Word",
       ignoredDeck: "",
       colorIntensity: 0.7,
-      showTooltips: true,
       showStats: true,
     };
 

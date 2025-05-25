@@ -36,7 +36,6 @@ let segmenter: Intl.Segmenter;
 // Settings and frequency data
 let settings = {
   colorIntensity: 0.7,
-  showTooltips: true,
   showStats: true,
 };
 
@@ -432,7 +431,7 @@ function wrapUnknown(textNode: Text, unknownWords: Set<string>): number {
   }
 }
 
-// Apply frequency-based coloring and tooltip to a word element
+// Apply frequency-based coloring to a word element
 async function applyFrequencyColoring(
   element: HTMLElement,
   word: string
@@ -453,36 +452,10 @@ async function applyFrequencyColoring(
     // Apply styling
     element.style.color = colors.color;
     element.style.backgroundColor = colors.bgColor;
-
-    // Create tooltip text
-    let tooltipText = `Unknown word: ${word}`;
-    if (frequency !== null) {
-      tooltipText += `\nFrequency rank: #${frequency.toLocaleString()}`;
-
-      // Add frequency category
-      if (frequency <= 100) {
-        tooltipText += " (Very Common)";
-      } else if (frequency <= 500) {
-        tooltipText += " (Common)";
-      } else if (frequency <= 2000) {
-        tooltipText += " (Uncommon)";
-      } else if (frequency <= 10000) {
-        tooltipText += " (Rare)";
-      } else {
-        tooltipText += " (Very Rare)";
-      }
-    } else {
-      tooltipText += "\nNot found in frequency database";
-    }
-
-    if (settings.showTooltips) {
-      element.title = tooltipText;
-    }
   } catch (error) {
     console.warn(`❌ Error applying frequency coloring for "${word}":`, error);
     // Fallback to yellow highlighting
     element.style.backgroundColor = "rgba(255, 255, 0, 0.3)";
-    element.title = `Unknown word: ${word}`;
   }
 }
 

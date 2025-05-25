@@ -5,7 +5,6 @@ interface Settings {
   wordField: string;
   ignoredDeck: string;
   colorIntensity: number;
-  showTooltips: boolean;
   showStats: boolean;
 }
 
@@ -15,46 +14,12 @@ const defaultSettings: Settings = {
   wordField: "Word",
   ignoredDeck: "",
   colorIntensity: 0.7,
-  showTooltips: true,
   showStats: true,
 };
-
-// Debug logging
-let debugLogs: Array<{ timestamp: string; message: string; type: string }> = [];
-
-function log(
-  message: string,
-  type: "success" | "error" | "warning" | "info" = "info"
-) {
-  const timestamp = new Date().toLocaleTimeString();
-  const logEntry = { timestamp, message, type };
-  debugLogs.push(logEntry);
-
-  console.log(`[Anki Options] ${message}`);
-
-  const logsContainer = document.getElementById("debugLogs");
-  if (logsContainer) {
-    const logElement = document.createElement("div");
-    logElement.className = `log-entry log-${type}`;
-    logElement.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
-    logsContainer.appendChild(logElement);
-    logsContainer.scrollTop = logsContainer.scrollHeight;
-  }
-}
-
-function clearDebugLogs() {
-  debugLogs = [];
-  const logsContainer = document.getElementById("debugLogs");
-  if (logsContainer) {
-    logsContainer.innerHTML =
-      '<div class="log-entry log-info">Debug logs cleared. Ready for new tests...</div>';
-  }
-}
 
 // AnkiConnect helper
 async function ankiConnect(params: any): Promise<any> {
   try {
-    log(`📤 AnkiConnect request: ${params.action}`, "info");
     const response = await fetch("http://127.0.0.1:8765", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -70,10 +35,8 @@ async function ankiConnect(params: any): Promise<any> {
       throw new Error(`AnkiConnect error: ${result.error}`);
     }
 
-    log(`✅ AnkiConnect success: ${params.action}`, "success");
     return result;
   } catch (error) {
-    log(`❌ AnkiConnect error: ${error}`, "error");
     throw error;
   }
 }
@@ -82,10 +45,6 @@ async function ankiConnect(params: any): Promise<any> {
 async function loadSettings(): Promise<Settings> {
   return new Promise((resolve) => {
     chrome.storage.sync.get(defaultSettings, (result) => {
-      log(
-        `⚙️ Settings loaded: intensity=${result.colorIntensity}, tooltips=${result.showTooltips}, stats=${result.showStats}`,
-        "info"
-      );
       resolve(result as Settings);
     });
   });
@@ -94,7 +53,6 @@ async function loadSettings(): Promise<Settings> {
 async function saveSettings(settings: Partial<Settings>): Promise<void> {
   return new Promise((resolve) => {
     chrome.storage.sync.set(settings, () => {
-      log(`💾 Settings saved: ${JSON.stringify(settings)}`, "success");
       resolve();
     });
   });
@@ -116,11 +74,6 @@ function showStatus(
       element.style.display = "none";
     }, 5000);
   }
-
-  log(
-    `📢 Status: ${message}`,
-    type === "success" ? "success" : type === "error" ? "error" : "info"
-  );
 }
 
 // Load and populate deck list
@@ -263,22 +216,23 @@ async function initializeOptions(): Promise<void> {
   // Load current settings
   const settings = await loadSettings();
 
-  // Populate form fields
+  // Load decks first, then set the selected values
+  await loadDecks();
+
+  // Now set the deck values after decks are loaded
   (document.getElementById("primaryDeck") as HTMLSelectElement).value =
     settings.primaryDeck;
-  (document.getElementById("wordField") as HTMLSelectElement).value =
-    settings.wordField;
   (document.getElementById("ignoredDeck") as HTMLSelectElement).value =
     settings.ignoredDeck;
+
+  // Set other form fields
   (document.getElementById("colorIntensity") as HTMLInputElement).value =
     settings.colorIntensity.toString();
-  (document.getElementById("showTooltips") as HTMLInputElement).checked =
-    settings.showTooltips;
   (document.getElementById("showStats") as HTMLInputElement).checked =
     settings.showStats;
 
-  // Load decks and frequency stats
-  await Promise.all([loadDecks(), loadFrequencyStats()]);
+  // Load frequency stats
+  await loadFrequencyStats();
 
   // If primary deck is set, load its fields
   if (settings.primaryDeck) {
@@ -330,14 +284,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const colorIntensity = parseFloat(
         (document.getElementById("colorIntensity") as HTMLInputElement).value
       );
-      const showTooltips = (
-        document.getElementById("showTooltips") as HTMLInputElement
-      ).checked;
       const showStats = (
         document.getElementById("showStats") as HTMLInputElement
       ).checked;
 
-      await saveSettings({ colorIntensity, showTooltips, showStats });
+      await saveSettings({ colorIntensity, showStats });
       showStatus(
         "displayStatus",
         "Display settings saved successfully",
@@ -411,130 +362,5 @@ document.addEventListener("DOMContentLoaded", () => {
     if (valueDisplay) {
       valueDisplay.textContent = value;
     }
-    log(`🎨 Color intensity changed to: ${value}`, "info");
   });
-
-  // Open test page
-  document.getElementById("openTestPage")?.addEventListener("click", () => {
-    log("🔍 Opening unified test page...", "info");
-    const testPageUrl = chrome.runtime.getURL("test-unified.html");
-    window.open(testPageUrl, "_blank");
-  });
-
-  // Test current settings
-  document
-    .getElementById("testCurrentSettings")
-    ?.addEventListener("click", async () => {
-      log("⚙️ Testing current settings...", "info");
-      await testCurrentSettings();
-    });
-
-  // Clear debug logs
-  document.getElementById("clearDebugLogs")?.addEventListener("click", () => {
-    clearDebugLogs();
-  });
-
-  // Update stats display
-  updateStatsDisplay();
-
-  // Periodic stats update
-  setInterval(updateStatsDisplay, 5000);
 });
-
-// Test current settings function
-async function testCurrentSettings(): Promise<void> {
-  try {
-    const settings = await loadSettings();
-
-    log(`📊 Testing settings: ${JSON.stringify(settings)}`, "info");
-
-    // Test color intensity
-    if (settings.colorIntensity >= 0.3 && settings.colorIntensity <= 1.0) {
-      log(`✅ Color intensity valid: ${settings.colorIntensity}`, "success");
-    } else {
-      log(`❌ Color intensity invalid: ${settings.colorIntensity}`, "error");
-    }
-
-    // Test boolean settings
-    log(`🔘 Show tooltips: ${settings.showTooltips}`, "info");
-    log(`📈 Show stats: ${settings.showStats}`, "info");
-
-    // Test deck configuration
-    if (settings.primaryDeck) {
-      log(`📚 Primary deck configured: "${settings.primaryDeck}"`, "success");
-
-      if (settings.wordField) {
-        log(`🏷️ Word field configured: "${settings.wordField}"`, "success");
-      } else {
-        log(`⚠️ No word field configured`, "warning");
-      }
-    } else {
-      log(`⚠️ No primary deck configured`, "warning");
-    }
-
-    if (settings.ignoredDeck) {
-      log(`🚫 Ignored deck configured: "${settings.ignoredDeck}"`, "info");
-    } else {
-      log(`ℹ️ No ignored deck configured`, "info");
-    }
-
-    // Test storage usage
-    chrome.storage.sync.getBytesInUse(null, (bytesInUse) => {
-      const kbUsed = Math.round((bytesInUse / 1024) * 10) / 10;
-      log(`💾 Storage usage: ${kbUsed} KB`, "info");
-
-      if (bytesInUse > 100000) {
-        // Chrome sync storage limit is ~100KB
-        log(`⚠️ Storage usage high: ${kbUsed} KB`, "warning");
-      }
-    });
-
-    log("✅ Settings test completed", "success");
-  } catch (error) {
-    log(`❌ Settings test failed: ${error}`, "error");
-  }
-}
-
-// Update stats display
-function updateStatsDisplay(): void {
-  // Update current intensity display
-  const intensitySlider = document.getElementById(
-    "colorIntensity"
-  ) as HTMLInputElement;
-  const intensityDisplay = document.getElementById("currentIntensity");
-  if (intensitySlider && intensityDisplay) {
-    intensityDisplay.textContent = intensitySlider.value;
-  }
-
-  // Update settings status
-  chrome.storage.sync.get(defaultSettings, (result) => {
-    const settingsStatus = document.getElementById("settingsStatus");
-    if (settingsStatus) {
-      const hasValidConfig = result.primaryDeck && result.wordField;
-      settingsStatus.textContent = hasValidConfig
-        ? "✅ Valid"
-        : "⚠️ Incomplete";
-      settingsStatus.style.color = hasValidConfig ? "#28a745" : "#ffc107";
-    }
-  });
-
-  // Update storage usage
-  chrome.storage.sync.getBytesInUse(null, (bytesInUse) => {
-    const storageDisplay = document.getElementById("storageUsed");
-    if (storageDisplay) {
-      const kbUsed = Math.round((bytesInUse / 1024) * 10) / 10;
-      storageDisplay.textContent = `${kbUsed} KB`;
-
-      // Color code based on usage
-      if (bytesInUse > 80000) {
-        // 80KB+ is getting high
-        storageDisplay.style.color = "#dc3545"; // Red
-      } else if (bytesInUse > 50000) {
-        // 50KB+ is moderate
-        storageDisplay.style.color = "#ffc107"; // Yellow
-      } else {
-        storageDisplay.style.color = "#28a745"; // Green
-      }
-    }
-  });
-}

@@ -12,7 +12,6 @@ interface FrequencyEntry {
 // Settings interface
 interface Settings {
   colorIntensity: number;
-  showTooltips: boolean;
   showStats: boolean;
 }
 
@@ -300,7 +299,6 @@ export async function loadSettings(): Promise<Settings> {
   return new Promise((resolve) => {
     const defaultSettings: Settings = {
       colorIntensity: 0.7,
-      showTooltips: true,
       showStats: true,
     };
 
