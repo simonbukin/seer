@@ -175,6 +175,17 @@ export function applyHighlightStyle(
         element.style.color = colors.color;
       }
       break;
+
+    case "rainbow":
+      element.style.textDecoration = "none";
+      element.style.borderBottom = "3px solid transparent";
+      element.style.backgroundImage =
+        "linear-gradient(90deg, #ff0000, #ff8000, #ffff00, #80ff00, #00ff00, #00ff80, #00ffff, #0080ff, #0000ff, #8000ff, #ff00ff, #ff0080)";
+      element.style.backgroundSize = "100% 3px";
+      element.style.backgroundRepeat = "no-repeat";
+      element.style.backgroundPosition = "0 100%";
+      element.style.animation = "rainbow-shift 3s linear infinite";
+      break;
   }
 }
 

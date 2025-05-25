@@ -4,10 +4,14 @@ import {
   RefreshMessage,
   ToggleHighlightsMessage,
   GetHighlightStateMessage,
+  ToggleI1SentenceModeMessage,
+  GetI1SentenceModeMessage,
   TokensResponse,
   RefreshResponse,
   ToggleHighlightsResponse,
   GetHighlightStateResponse,
+  ToggleI1SentenceModeResponse,
+  GetI1SentenceModeResponse,
   AddIgnoredWordMessage,
   AddIgnoredWordResponse,
   GetIgnoredWordsMessage,
@@ -32,6 +36,7 @@ interface Settings {
   colorIntensity: number;
   showStats: boolean;
   highlightsEnabled: boolean;
+  i1SentenceMode: boolean;
 }
 
 // Load settings from Chrome storage
@@ -43,6 +48,7 @@ async function loadSettings(): Promise<Settings> {
       colorIntensity: 0.7,
       showStats: true,
       highlightsEnabled: true,
+      i1SentenceMode: false,
     };
 
     chrome.storage.sync.get(defaultSettings, (result) => {
@@ -64,6 +70,21 @@ async function saveHighlightState(enabled: boolean): Promise<void> {
 async function getHighlightState(): Promise<boolean> {
   const settings = await loadSettings();
   return settings.highlightsEnabled;
+}
+
+// Save i+1 sentence mode state
+async function saveI1SentenceMode(enabled: boolean): Promise<void> {
+  return new Promise((resolve) => {
+    chrome.storage.sync.set({ i1SentenceMode: enabled }, () => {
+      resolve();
+    });
+  });
+}
+
+// Get i+1 sentence mode state
+async function getI1SentenceMode(): Promise<boolean> {
+  const settings = await loadSettings();
+  return settings.i1SentenceMode;
 }
 
 // AnkiConnect helper function
@@ -458,6 +479,57 @@ async function setupIgnoredWords(
         .catch((error) => {
           console.error("Failed to get highlight state:", error);
           const response: GetHighlightStateResponse = { enabled: true };
+          sendResponse(response);
+        });
+      return true;
+    }
+
+    if (msg.type === "TOGGLE_I1_SENTENCE_MODE") {
+      const toggleMsg = msg as ToggleI1SentenceModeMessage;
+      saveI1SentenceMode(toggleMsg.enabled)
+        .then(() => {
+          // Send message to all content scripts to toggle i+1 mode
+          chrome.tabs.query({}, (tabs) => {
+            tabs.forEach((tab) => {
+              if (tab.id) {
+                chrome.tabs
+                  .sendMessage(tab.id, {
+                    type: "TOGGLE_I1_SENTENCE_MODE_CONTENT",
+                    enabled: toggleMsg.enabled,
+                  })
+                  .catch(() => {
+                    // Ignore errors for tabs that don't have content script
+                  });
+              }
+            });
+          });
+
+          const response: ToggleI1SentenceModeResponse = {
+            ok: true,
+            enabled: toggleMsg.enabled,
+          };
+          sendResponse(response);
+        })
+        .catch((error) => {
+          console.error("Failed to save i+1 sentence mode state:", error);
+          const response: ToggleI1SentenceModeResponse = {
+            ok: false,
+            enabled: toggleMsg.enabled,
+          };
+          sendResponse(response);
+        });
+      return true;
+    }
+
+    if (msg.type === "GET_I1_SENTENCE_MODE") {
+      getI1SentenceMode()
+        .then((enabled) => {
+          const response: GetI1SentenceModeResponse = { enabled };
+          sendResponse(response);
+        })
+        .catch((error) => {
+          console.error("Failed to get i+1 sentence mode state:", error);
+          const response: GetI1SentenceModeResponse = { enabled: false };
           sendResponse(response);
         });
       return true;

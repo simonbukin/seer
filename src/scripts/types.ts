@@ -21,6 +21,20 @@ export interface ToggleHighlightsContentMessage {
   enabled: boolean;
 }
 
+export interface ToggleI1SentenceModeMessage {
+  type: "TOGGLE_I1_SENTENCE_MODE";
+  enabled: boolean;
+}
+
+export interface GetI1SentenceModeMessage {
+  type: "GET_I1_SENTENCE_MODE";
+}
+
+export interface ToggleI1SentenceModeContentMessage {
+  type: "TOGGLE_I1_SENTENCE_MODE_CONTENT";
+  enabled: boolean;
+}
+
 export interface AddIgnoredWordMessage {
   type: "ADD_IGNORED_WORD";
   word: string;
@@ -64,6 +78,15 @@ export interface GetHighlightStateResponse {
   enabled: boolean;
 }
 
+export interface ToggleI1SentenceModeResponse {
+  ok: boolean;
+  enabled: boolean;
+}
+
+export interface GetI1SentenceModeResponse {
+  enabled: boolean;
+}
+
 export interface AddIgnoredWordResponse {
   success: boolean;
   error?: string;
@@ -96,6 +119,9 @@ export type Message =
   | ToggleHighlightsMessage
   | GetHighlightStateMessage
   | ToggleHighlightsContentMessage
+  | ToggleI1SentenceModeMessage
+  | GetI1SentenceModeMessage
+  | ToggleI1SentenceModeContentMessage
   | AddIgnoredWordMessage
   | GetIgnoredWordsMessage
   | SetupIgnoredWordsMessage
@@ -106,6 +132,8 @@ export type Response =
   | RefreshResponse
   | ToggleHighlightsResponse
   | GetHighlightStateResponse
+  | ToggleI1SentenceModeResponse
+  | GetI1SentenceModeResponse
   | AddIgnoredWordResponse
   | GetIgnoredWordsResponse
   | SetupIgnoredWordsResponse
@@ -113,7 +141,12 @@ export type Response =
   | RawAnkiConnectResponse;
 
 // New highlight style interfaces
-export type HighlightStyle = "highlight" | "underline" | "color" | "custom";
+export type HighlightStyle =
+  | "highlight"
+  | "underline"
+  | "color"
+  | "custom"
+  | "rainbow";
 
 export interface GradientColors {
   startColor: string;

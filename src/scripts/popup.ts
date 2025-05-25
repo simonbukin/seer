@@ -5,6 +5,10 @@ import {
   ToggleHighlightsResponse,
   GetHighlightStateMessage,
   GetHighlightStateResponse,
+  ToggleI1SentenceModeMessage,
+  ToggleI1SentenceModeResponse,
+  GetI1SentenceModeMessage,
+  GetI1SentenceModeResponse,
 } from "./types";
 
 function showStatus(
@@ -39,6 +43,15 @@ function updateToggleUI(enabled: boolean): void {
   }
 }
 
+function updateI1SentenceToggleUI(enabled: boolean): void {
+  const toggle = document.getElementById("i1SentenceToggle")!;
+  if (enabled) {
+    toggle.classList.add("active");
+  } else {
+    toggle.classList.remove("active");
+  }
+}
+
 async function getCurrentHighlightState(): Promise<boolean> {
   return new Promise((resolve) => {
     const message: GetHighlightStateMessage = { type: "GET_HIGHLIGHT_STATE" };
@@ -55,6 +68,27 @@ async function getCurrentHighlightState(): Promise<boolean> {
           return;
         }
         resolve(response?.enabled ?? true);
+      }
+    );
+  });
+}
+
+async function getCurrentI1SentenceMode(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const message: GetI1SentenceModeMessage = { type: "GET_I1_SENTENCE_MODE" };
+
+    chrome.runtime.sendMessage(
+      message,
+      (response: GetI1SentenceModeResponse) => {
+        if (chrome.runtime.lastError) {
+          console.error(
+            "Error getting i+1 sentence mode state:",
+            chrome.runtime.lastError
+          );
+          resolve(false); // Default to disabled
+          return;
+        }
+        resolve(response?.enabled ?? false);
       }
     );
   });
@@ -92,6 +126,41 @@ async function toggleHighlights(enabled: boolean): Promise<boolean> {
   });
 }
 
+async function toggleI1SentenceMode(enabled: boolean): Promise<boolean> {
+  return new Promise((resolve) => {
+    const message: ToggleI1SentenceModeMessage = {
+      type: "TOGGLE_I1_SENTENCE_MODE",
+      enabled,
+    };
+
+    chrome.runtime.sendMessage(
+      message,
+      (response: ToggleI1SentenceModeResponse) => {
+        if (chrome.runtime.lastError) {
+          console.error(
+            "Error toggling i+1 sentence mode:",
+            chrome.runtime.lastError
+          );
+          showStatus("Failed to toggle i+1 sentence mode", "error");
+          resolve(false);
+          return;
+        }
+
+        if (response?.ok) {
+          const statusMessage = enabled
+            ? "i+1 Sentence Mode enabled"
+            : "i+1 Sentence Mode disabled";
+          showStatus(statusMessage, "success");
+          resolve(true);
+        } else {
+          showStatus("Failed to toggle i+1 sentence mode", "error");
+          resolve(false);
+        }
+      }
+    );
+  });
+}
+
 async function refreshDeckData(): Promise<void> {
   setLoading(true);
 
@@ -121,7 +190,9 @@ function openOptionsPage(): void {
 document.addEventListener("DOMContentLoaded", async () => {
   // Initialize UI with current state
   const currentState = await getCurrentHighlightState();
+  const currentI1State = await getCurrentI1SentenceMode();
   updateToggleUI(currentState);
+  updateI1SentenceToggleUI(currentI1State);
 
   // Toggle highlights handler
   const highlightToggle = document.getElementById("highlightToggle")!;
@@ -138,6 +209,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Revert UI if failed
     if (!success) {
       updateToggleUI(currentEnabled);
+    }
+  });
+
+  // Toggle i+1 sentence mode handler
+  const i1SentenceToggle = document.getElementById("i1SentenceToggle")!;
+  i1SentenceToggle.addEventListener("click", async () => {
+    const currentEnabled = i1SentenceToggle.classList.contains("active");
+    const newEnabled = !currentEnabled;
+
+    // Optimistically update UI
+    updateI1SentenceToggleUI(newEnabled);
+
+    // Send toggle message
+    const success = await toggleI1SentenceMode(newEnabled);
+
+    // Revert UI if failed
+    if (!success) {
+      updateI1SentenceToggleUI(currentEnabled);
     }
   });
 

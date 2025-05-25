@@ -2,6 +2,7 @@ import {
   TokensMessage,
   TokensResponse,
   ToggleHighlightsContentMessage,
+  ToggleI1SentenceModeContentMessage,
   HighlightStyle,
   GradientColors,
   IgnoredWordsSettings,
@@ -42,6 +43,9 @@ let settings = {
 
 // Highlight state
 let highlightsEnabled = true;
+
+// i+1 sentence mode state
+let i1SentenceMode = false;
 
 // Ignored words state
 let ignoredWords = new Set<string>();
@@ -85,8 +89,12 @@ async function initializeExtension(): Promise<void> {
     settings = await loadSettings();
 
     // Load highlight state from storage
-    const result = await chrome.storage.sync.get({ highlightsEnabled: true });
+    const result = await chrome.storage.sync.get({
+      highlightsEnabled: true,
+      i1SentenceMode: false,
+    });
     highlightsEnabled = result.highlightsEnabled;
+    i1SentenceMode = result.i1SentenceMode;
 
     // Load ignored words settings and data
     console.log("📝 Loading ignored words...");
@@ -120,6 +128,9 @@ async function initializeExtension(): Promise<void> {
 
     console.log("✅ Extension initialization complete");
     console.log(`🎨 Highlights ${highlightsEnabled ? "enabled" : "disabled"}`);
+    console.log(
+      `🔤 i+1 Sentence Mode ${i1SentenceMode ? "enabled" : "disabled"}`
+    );
     console.log(
       `📝 Ignored words ${
         ignoredWordsSettings.enabled ? "enabled" : "disabled"
@@ -186,6 +197,133 @@ function restoreHighlights(): void {
   scan().catch((error) => console.error("❌ Error during scan:", error));
 }
 
+// Function to segment text into sentences
+function segmentIntoSentences(text: string): string[] {
+  // Split by sentence-ending punctuation, keeping the punctuation
+  const sentences = text
+    .split(/([。！？\.!?]+)/)
+    .filter((s) => s.trim().length > 0);
+
+  // Recombine sentences with their punctuation
+  const result: string[] = [];
+  for (let i = 0; i < sentences.length; i += 2) {
+    const sentence = sentences[i];
+    const punctuation = sentences[i + 1] || "";
+    if (sentence.trim()) {
+      result.push((sentence + punctuation).trim());
+    }
+  }
+
+  return result;
+}
+
+// Interface for sentence extraction
+interface ExtractedSentence {
+  text: string;
+  elements: Element[];
+  textNodes: Text[];
+  startOffset: number;
+  endOffset: number;
+}
+
+// Function to extract complete sentences from DOM elements
+function extractSentencesFromElement(element: Element): ExtractedSentence[] {
+  const sentences: ExtractedSentence[] = [];
+
+  // Get all text content from the element
+  const fullText = element.textContent || "";
+  if (!fullText.trim()) return sentences;
+
+  // Split into sentences
+  const sentenceTexts = segmentIntoSentences(fullText);
+  if (sentenceTexts.length === 0) return sentences;
+
+  // For each sentence, find the corresponding DOM nodes
+  let currentOffset = 0;
+
+  for (const sentenceText of sentenceTexts) {
+    const startOffset = fullText.indexOf(sentenceText, currentOffset);
+    if (startOffset === -1) continue;
+
+    const endOffset = startOffset + sentenceText.length;
+
+    // Find all text nodes and elements that contribute to this sentence
+    const sentenceNodes = findNodesForTextRange(
+      element,
+      startOffset,
+      endOffset
+    );
+
+    if (sentenceNodes.textNodes.length > 0) {
+      sentences.push({
+        text: sentenceText,
+        elements: sentenceNodes.elements,
+        textNodes: sentenceNodes.textNodes,
+        startOffset,
+        endOffset,
+      });
+    }
+
+    currentOffset = endOffset;
+  }
+
+  return sentences;
+}
+
+// Helper function to find DOM nodes for a specific text range
+function findNodesForTextRange(
+  element: Element,
+  startOffset: number,
+  endOffset: number
+): {
+  elements: Element[];
+  textNodes: Text[];
+} {
+  const result = {
+    elements: [] as Element[],
+    textNodes: [] as Text[],
+  };
+
+  let currentOffset = 0;
+
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      const parent = node.parentElement;
+      if (!parent) return NodeFilter.FILTER_REJECT;
+
+      const tagName = parent.tagName.toLowerCase();
+      if (tagName === "script" || tagName === "style") {
+        return NodeFilter.FILTER_REJECT;
+      }
+
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    const textNode = node as Text;
+    const text = textNode.data;
+    const nodeStart = currentOffset;
+    const nodeEnd = currentOffset + text.length;
+
+    // Check if this text node overlaps with our target range
+    if (nodeEnd > startOffset && nodeStart < endOffset) {
+      result.textNodes.push(textNode);
+
+      // Add the parent element if not already included
+      const parentElement = textNode.parentElement;
+      if (parentElement && !result.elements.includes(parentElement)) {
+        result.elements.push(parentElement);
+      }
+    }
+
+    currentOffset = nodeEnd;
+  }
+
+  return result;
+}
+
 // Function to toggle highlights on/off
 function toggleHighlights(enabled: boolean): void {
   highlightsEnabled = enabled;
@@ -205,6 +343,26 @@ function toggleHighlights(enabled: boolean): void {
     } else if (!enabled) {
       statsToggle.style.display = "none";
       hideStats();
+    }
+  }
+}
+
+// Function to toggle i+1 sentence mode
+function toggleI1SentenceMode(enabled: boolean): void {
+  i1SentenceMode = enabled;
+
+  if (enabled) {
+    console.log("🔤 Enabling i+1 sentence mode...");
+    // Remove all existing highlights first
+    removeAllHighlights();
+    // Perform fresh scan in i+1 mode
+    scan().catch((error) => console.error("❌ Error during i+1 scan:", error));
+  } else {
+    console.log("🚫 Disabling i+1 sentence mode...");
+    // Remove all highlights and restore normal mode if highlights are enabled
+    removeAllHighlights();
+    if (highlightsEnabled) {
+      restoreHighlights();
     }
   }
 }
@@ -307,6 +465,11 @@ style.textContent = `
   .seer-stats .close-btn:hover {
     background: rgba(255, 255, 255, 0.1);
     color: white;
+  }
+
+  @keyframes rainbow-shift {
+    0% { background-position: 0% 100%; }
+    100% { background-position: 200% 100%; }
   }
   
   .seer-stats .stat-row {
@@ -491,8 +654,268 @@ async function reapplyHighlighting(): Promise<void> {
 // Flag to prevent scanning during our own DOM modifications
 let isModifyingDOM = false;
 
+// Sentence-aware scanning for i+1 mode
+async function scanSentences(root: Node = document.body): Promise<void> {
+  if (isModifyingDOM) return;
+
+  console.log("🔤 Starting sentence-aware scan for i+1 mode...");
+
+  const allTokens = new Set<string>();
+  const sentenceData: Array<{
+    sentence: ExtractedSentence;
+    tokens: string[];
+    unknownTokens: string[];
+  }> = [];
+
+  // Find all block-level elements that likely contain complete sentences
+  const blockElements = (root as Element).querySelectorAll(
+    "p, div, h1, h2, h3, h4, h5, h6, li, td, th, blockquote, article, section, aside, main, header, footer, nav"
+  );
+
+  // Also include the root if it's an element
+  const elementsToProcess =
+    root.nodeType === Node.ELEMENT_NODE
+      ? [root as Element, ...Array.from(blockElements)]
+      : Array.from(blockElements);
+
+  for (const element of elementsToProcess) {
+    // Skip if this element is inside another element we're already processing
+    const isNested = elementsToProcess.some(
+      (other) => other !== element && other.contains(element)
+    );
+    if (isNested) continue;
+
+    // Extract sentences from this element
+    const sentences = extractSentencesFromElement(element);
+
+    for (const sentence of sentences) {
+      try {
+        // Tokenize the complete sentence
+        const segments = await segmentJapanese(sentence.text);
+        const tokens: string[] = [];
+
+        for (const segment of segments) {
+          if (segment.isWordLike) {
+            const token = segment.segment.trim();
+            if (
+              token.length > 0 &&
+              /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(token)
+            ) {
+              tokens.push(token);
+              allTokens.add(token);
+            }
+          }
+        }
+
+        if (tokens.length > 0) {
+          sentenceData.push({
+            sentence,
+            tokens,
+            unknownTokens: [], // Will be filled after we get response from background
+          });
+
+          console.log(
+            `📝 Sentence: "${sentence.text.substring(0, 50)}..." -> ${
+              tokens.length
+            } tokens`
+          );
+        }
+      } catch (error) {
+        console.warn("❌ Error tokenizing sentence:", error);
+      }
+    }
+  }
+
+  console.log(
+    `📊 Sentence scan complete: ${sentenceData.length} sentences, ${allTokens.size} unique tokens`
+  );
+
+  if (allTokens.size === 0) {
+    console.log("⚠️ No Japanese tokens found in sentences");
+    updateStatsOverlay();
+    return;
+  }
+
+  // Send tokens to background script
+  const message: TokensMessage = {
+    type: "TOKENS",
+    tokens: Array.from(allTokens),
+  };
+
+  chrome.runtime.sendMessage(message, async (response: TokensResponse) => {
+    if (chrome.runtime.lastError) {
+      console.error("❌ Error sending message:", chrome.runtime.lastError);
+      return;
+    }
+
+    if (response && response.unknown) {
+      const unknownSet = new Set(
+        response.unknown.filter((word) => !ignoredWords.has(word))
+      );
+
+      console.log(`📥 Received ${response.unknown.length} unknown words`);
+
+      // Analyze each sentence for i+1 status
+      let i1SentenceCount = 0;
+      let totalHighlightedWords = 0;
+
+      for (const data of sentenceData) {
+        // Count unknown words in this sentence
+        data.unknownTokens = data.tokens.filter((token) =>
+          unknownSet.has(token)
+        );
+
+        // Only process i+1 sentences (exactly 1 unknown word)
+        if (data.unknownTokens.length === 1) {
+          i1SentenceCount++;
+          const unknownWord = data.unknownTokens[0];
+
+          console.log(
+            `🎯 i+1 sentence found: "${data.sentence.text.substring(
+              0,
+              50
+            )}..." with unknown word: "${unknownWord}"`
+          );
+
+          // Highlight the unknown word in this sentence
+          const highlighted = await highlightWordInSentence(
+            data.sentence,
+            unknownWord
+          );
+          totalHighlightedWords += highlighted;
+        }
+      }
+
+      console.log(
+        `✨ Found ${i1SentenceCount} i+1 sentences, highlighted ${totalHighlightedWords} words`
+      );
+
+      // Update stats
+      stats.totalTokens = allTokens.size;
+      stats.unknownTokens = response.unknown.filter(
+        (word) => !ignoredWords.has(word)
+      ).length;
+      stats.knownTokens = allTokens.size - response.unknown.length;
+      stats.lastUpdate = new Date();
+
+      updateStatsOverlay();
+    }
+  });
+}
+
+// Function to highlight a specific word within a sentence's DOM nodes
+async function highlightWordInSentence(
+  sentence: ExtractedSentence,
+  targetWord: string
+): Promise<number> {
+  let highlightedCount = 0;
+
+  try {
+    // Set flag to prevent observer from triggering during our changes
+    isModifyingDOM = true;
+
+    // Process each text node in the sentence
+    for (const textNode of sentence.textNodes) {
+      const text = textNode.data;
+      if (!text.trim()) continue;
+
+      // Tokenize this text node
+      const segments = await segmentJapanese(text);
+      let hasTargetWord = false;
+
+      // Check if this text node contains our target word
+      for (const segment of segments) {
+        if (segment.isWordLike && segment.segment.trim() === targetWord) {
+          hasTargetWord = true;
+          break;
+        }
+      }
+
+      if (!hasTargetWord) continue;
+
+      // Create document fragment to replace the text node
+      const fragment = document.createDocumentFragment();
+
+      for (const segment of segments) {
+        if (segment.isWordLike && segment.segment.trim() === targetWord) {
+          // Create rainbow-highlighted span for the target word
+          const span = document.createElement("span");
+          span.className = CLS;
+          span.textContent = segment.segment;
+
+          // Apply rainbow styling for i+1 words
+          span.style.textDecoration = "none";
+          span.style.borderBottom = "3px solid transparent";
+          span.style.backgroundImage =
+            "linear-gradient(90deg, #ff0000, #ff8000, #ffff00, #80ff00, #00ff00, #00ff80, #00ffff, #0080ff, #0000ff, #8000ff, #ff00ff, #ff0080)";
+          span.style.backgroundSize = "200% 3px";
+          span.style.backgroundRepeat = "no-repeat";
+          span.style.backgroundPosition = "0 100%";
+          span.style.animation = "rainbow-shift 3s linear infinite";
+
+          // Add click handler for ignoring words
+          span.addEventListener("click", async (event) => {
+            if (event.altKey) {
+              event.preventDefault();
+              event.stopPropagation();
+
+              const word = span.textContent?.trim();
+              if (word && ignoredWordsSettings.enabled) {
+                try {
+                  const success = await addIgnoredWord(
+                    word,
+                    ignoredWordsSettings
+                  );
+                  if (success) {
+                    ignoredWords.add(word);
+                    removeWordHighlights(word);
+                    showIgnoreNotification(word, true);
+                    updateStatsAfterIgnore();
+                  } else {
+                    showIgnoreNotification(word, false);
+                  }
+                } catch (error) {
+                  console.warn(`Failed to ignore word "${word}":`, error);
+                  showIgnoreNotification(word, false);
+                }
+              }
+            }
+          });
+
+          fragment.appendChild(span);
+          highlightedCount++;
+        } else {
+          // Keep as regular text
+          fragment.appendChild(document.createTextNode(segment.segment));
+        }
+      }
+
+      // Replace the original text node with the fragment
+      const parent = textNode.parentNode;
+      if (parent) {
+        parent.replaceChild(fragment, textNode);
+      }
+    }
+
+    // Clear flag after DOM modifications are complete
+    setTimeout(() => {
+      isModifyingDOM = false;
+    }, 100);
+  } catch (error) {
+    console.warn("❌ Error highlighting word in sentence:", error);
+    isModifyingDOM = false;
+  }
+
+  return highlightedCount;
+}
+
 async function scan(root: Node = document.body): Promise<void> {
-  if (isModifyingDOM || !highlightsEnabled) return;
+  if (isModifyingDOM || (!highlightsEnabled && !i1SentenceMode)) return;
+
+  // Use sentence-aware scanning for i+1 mode
+  if (i1SentenceMode) {
+    return scanSentences(root);
+  }
 
   console.log("🔍 Starting Japanese token scan...");
 
@@ -627,21 +1050,34 @@ async function scan(root: Node = document.body): Promise<void> {
         )}% knowledge)`
       );
 
-      // Only apply highlights if they're enabled
-      if (highlightsEnabled) {
+      // Apply highlights based on current mode
+      if (highlightsEnabled || i1SentenceMode) {
         // Set flag to prevent observer from triggering during our changes
         isModifyingDOM = true;
 
-        console.log("🎨 Starting to highlight unknown words...");
+        if (i1SentenceMode) {
+          console.log("🔤 Starting i+1 sentence highlighting...");
 
-        // Process each text node
-        let highlightedWords = 0;
-        for (const textNode of textNodes) {
-          const highlighted = await wrapUnknown(textNode, unknownSet);
-          highlightedWords += highlighted;
+          // Process each text node for i+1 sentences
+          let highlightedWords = 0;
+          for (const textNode of textNodes) {
+            const highlighted = await wrapI1Sentences(textNode, unknownSet);
+            highlightedWords += highlighted;
+          }
+
+          console.log(`✨ Highlighted ${highlightedWords} i+1 words`);
+        } else {
+          console.log("🎨 Starting to highlight unknown words...");
+
+          // Process each text node normally
+          let highlightedWords = 0;
+          for (const textNode of textNodes) {
+            const highlighted = await wrapUnknown(textNode, unknownSet);
+            highlightedWords += highlighted;
+          }
+
+          console.log(`✨ Highlighted ${highlightedWords} word instances`);
         }
-
-        console.log(`✨ Highlighted ${highlightedWords} word instances`);
 
         // Clear flag after DOM modifications are complete
         setTimeout(() => {
@@ -657,6 +1093,116 @@ async function scan(root: Node = document.body): Promise<void> {
   });
 }
 
+// Function to wrap unknown words in i+1 sentences
+async function wrapI1Sentences(
+  textNode: Text,
+  unknownWords: Set<string>
+): Promise<number> {
+  const text = textNode.data;
+  const parent = textNode.parentNode;
+
+  if (!parent) return 0;
+
+  try {
+    // Segment text into sentences
+    const sentences = segmentIntoSentences(text);
+
+    if (sentences.length === 0) return 0;
+
+    const fragment = document.createDocumentFragment();
+    let highlightedCount = 0;
+
+    for (const sentence of sentences) {
+      // Tokenize the sentence to count unknown words
+      const segments = await segmentJapanese(sentence);
+      const unknownWordsInSentence: string[] = [];
+
+      for (const segment of segments) {
+        if (segment.isWordLike && unknownWords.has(segment.segment.trim())) {
+          unknownWordsInSentence.push(segment.segment.trim());
+        }
+      }
+
+      // Only highlight if this is an i+1 sentence (exactly 1 unknown word)
+      if (unknownWordsInSentence.length === 1) {
+        const unknownWord = unknownWordsInSentence[0];
+
+        // Process segments and highlight the unknown word
+        for (const segment of segments) {
+          if (segment.isWordLike && segment.segment.trim() === unknownWord) {
+            // Wrap unknown word in span with rainbow styling
+            const span = document.createElement("span");
+            span.className = CLS;
+            span.textContent = segment.segment;
+
+            // Apply rainbow styling for i+1 words
+            span.style.textDecoration = "none";
+            span.style.borderBottom = "3px solid transparent";
+            span.style.backgroundImage =
+              "linear-gradient(90deg, #ff0000, #ff8000, #ffff00, #80ff00, #00ff00, #00ff80, #00ffff, #0080ff, #0000ff, #8000ff, #ff00ff, #ff0080)";
+            span.style.backgroundSize = "200% 3px";
+            span.style.backgroundRepeat = "no-repeat";
+            span.style.backgroundPosition = "0 100%";
+            span.style.animation = "rainbow-shift 3s linear infinite";
+
+            // Add click handler for ignoring words
+            span.addEventListener("click", async (event) => {
+              if (event.altKey) {
+                event.preventDefault();
+                event.stopPropagation();
+
+                const word = span.textContent?.trim();
+                if (word && ignoredWordsSettings.enabled) {
+                  try {
+                    const success = await addIgnoredWord(
+                      word,
+                      ignoredWordsSettings
+                    );
+                    if (success) {
+                      // Add to local ignored words set
+                      ignoredWords.add(word);
+
+                      // Remove this highlight and any other instances of the same word
+                      removeWordHighlights(word);
+
+                      // Show feedback
+                      showIgnoreNotification(word, true);
+
+                      // Update stats
+                      updateStatsAfterIgnore();
+                    } else {
+                      showIgnoreNotification(word, false);
+                    }
+                  } catch (error) {
+                    console.warn(`Failed to ignore word "${word}":`, error);
+                    showIgnoreNotification(word, false);
+                  }
+                }
+              }
+            });
+
+            fragment.appendChild(span);
+            highlightedCount++;
+          } else {
+            // Keep as text
+            fragment.appendChild(document.createTextNode(segment.segment));
+          }
+        }
+      } else {
+        // Not an i+1 sentence, keep as plain text
+        fragment.appendChild(document.createTextNode(sentence));
+      }
+    }
+
+    // Replace the original text node
+    parent.replaceChild(fragment, textNode);
+    return highlightedCount;
+  } catch (error) {
+    console.warn("❌ Error wrapping i+1 sentences:", error);
+    return 0;
+  }
+}
+
 async function wrapUnknown(
   textNode: Text,
   unknownWords: Set<string>
@@ -669,7 +1215,7 @@ async function wrapUnknown(
   try {
     const segments = await segmentJapanese(text);
 
-    if (segments.length <= 1) return 0;
+    if (segments.length === 0) return 0;
 
     const fragment = document.createDocumentFragment();
     let highlightedCount = 0;
@@ -889,6 +1435,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log(`🎛️ Received toggle highlights message: ${toggleMsg.enabled}`);
     toggleHighlights(toggleMsg.enabled);
   }
+
+  if (message.type === "TOGGLE_I1_SENTENCE_MODE_CONTENT") {
+    const toggleMsg = message as ToggleI1SentenceModeContentMessage;
+    console.log(
+      `🔤 Received toggle i+1 sentence mode message: ${toggleMsg.enabled}`
+    );
+    toggleI1SentenceMode(toggleMsg.enabled);
+  }
 });
 
 // Initialize immediately based on document state
@@ -901,13 +1455,13 @@ async function startExtension(): Promise<void> {
   // Create stats overlay (respects showStats setting and highlight state)
   createStatsOverlay();
 
-  // Only start scanning if highlights are enabled
-  if (highlightsEnabled) {
+  // Only start scanning if highlights are enabled or i+1 mode is enabled
+  if (highlightsEnabled || i1SentenceMode) {
     scan().catch((error) =>
       console.error("❌ Error during initial scan:", error)
     );
   } else {
-    console.log("🚫 Highlights disabled, skipping initial scan");
+    console.log("🚫 Highlights and i+1 mode disabled, skipping initial scan");
   }
 }
 
@@ -1049,8 +1603,8 @@ const observer = new MutationObserver((mutations) => {
   // Check if extension context is still valid
   if (!checkExtensionContext()) return;
 
-  // Don't scan if we're currently modifying the DOM or highlights are disabled
-  if (isModifyingDOM || !highlightsEnabled) return;
+  // Don't scan if we're currently modifying the DOM or both highlights and i+1 mode are disabled
+  if (isModifyingDOM || (!highlightsEnabled && !i1SentenceMode)) return;
 
   let shouldScan = false;
 

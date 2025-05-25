@@ -99,38 +99,35 @@ class KuromojiTokenizer {
 
   // Helper method to determine if a token is word-like
   private isWordLike(token: KuromojiToken): boolean {
-    // Consider tokens as word-like if they are:
-    // - Known words (from dictionary)
-    // - Nouns, verbs, adjectives, or other content words
-    // - Not punctuation or symbols
-
-    if (token.word_type === "UNKNOWN") {
-      return false;
-    }
+    // Match Yomitan's word detection logic for shift+hover highlighting
+    // Yomitan is more permissive than the previous Seer logic
 
     const pos = token.pos;
+    const surface = token.surface_form;
 
-    // Include content words, exclude function words and punctuation
-    const contentWordTypes = [
-      "名詞",
-      "動詞",
-      "形容詞",
-      "副詞",
-      "連体詞",
-      "感動詞",
-    ];
-    const excludeTypes = ["記号", "補助記号", "空白"];
+    // Skip whitespace and certain symbols
+    if (pos === "空白" || pos === "記号") {
+      // But allow some symbols that contain Japanese characters
+      if (!/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(surface)) {
+        return false;
+      }
+    }
 
-    if (excludeTypes.includes(pos)) {
+    // Skip pure punctuation and ASCII-only tokens
+    if (
+      /^[\s\p{P}\p{S}]+$/u.test(surface) &&
+      !/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(surface)
+    ) {
       return false;
     }
 
-    if (contentWordTypes.includes(pos)) {
+    // Include any token that contains Japanese characters
+    // This matches Yomitan's permissive approach
+    if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(surface)) {
       return true;
     }
 
-    // For other types, check if it contains Japanese characters
-    return /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(token.surface_form);
+    return false;
   }
 
   // Method to get detailed token information (for debugging or advanced features)
