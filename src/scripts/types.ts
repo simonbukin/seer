@@ -141,12 +141,7 @@ export type Response =
   | RawAnkiConnectResponse;
 
 // New highlight style interfaces
-export type HighlightStyle =
-  | "highlight"
-  | "underline"
-  | "color"
-  | "custom"
-  | "rainbow";
+export type HighlightStyle = "underline" | "background" | "outline" | "dots";
 
 export interface GradientColors {
   startColor: string;
@@ -156,8 +151,9 @@ export interface GradientColors {
 export interface HighlightSettings {
   style: HighlightStyle;
   colorIntensity: number;
-  gradientColors: GradientColors;
-  customCSS: string;
+  useFrequencyColors: boolean;
+  singleColor: string;
+  showFrequencyOnHover: boolean;
 }
 
 // AnkiConnect types

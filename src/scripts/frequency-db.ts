@@ -1,5 +1,5 @@
 import Dexie from "dexie";
-import { HighlightStyle, GradientColors, HighlightSettings } from "./types";
+import { HighlightStyle, HighlightSettings } from "./types";
 
 // TypeScript interfaces for frequency data
 interface FrequencyEntry {
@@ -15,8 +15,9 @@ interface Settings {
   colorIntensity: number;
   showStats: boolean;
   highlightStyle: HighlightStyle;
-  gradientColors: GradientColors;
-  customCSS: string;
+  useFrequencyColors: boolean;
+  singleColor: string;
+  showFrequencyOnHover: boolean;
 }
 
 // Color calculation functions
@@ -69,55 +70,24 @@ export function getColorForFrequency(
   };
 }
 
-// Generate color from custom gradient
-export function getColorFromGradient(
-  frequency: number | null,
-  gradientColors: GradientColors,
+// Generate single color highlighting
+export function getSingleColor(
+  singleColor: string,
   intensity: number = 0.7
 ): { color: string; bgColor: string } {
-  if (frequency === null) {
-    // Gray for words not in frequency list
+  const rgb = hexToRgb(singleColor);
+
+  if (!rgb) {
+    // Fallback to default red
     return {
-      color: "#333333",
-      bgColor: `rgba(128, 128, 128, ${intensity * 0.15})`,
+      color: "#ff4444",
+      bgColor: `rgba(255, 68, 68, ${intensity * 0.3})`,
     };
   }
 
-  // Normalize frequency to 0-1 range
-  const logFreq = Math.log10(frequency);
-  const minLog = Math.log10(1);
-  const maxLog = Math.log10(500000);
-  const normalizedFreq = Math.min(
-    1.0,
-    Math.max(0.0, (logFreq - minLog) / (maxLog - minLog))
-  );
-
-  // Parse start and end colors
-  const startColor = hexToRgb(gradientColors.startColor);
-  const endColor = hexToRgb(gradientColors.endColor);
-
-  if (!startColor || !endColor) {
-    // Fallback to default colors
-    return getColorForFrequency(frequency, intensity);
-  }
-
-  // Interpolate between start and end colors
-  const r = Math.round(
-    startColor.r + (endColor.r - startColor.r) * normalizedFreq
-  );
-  const g = Math.round(
-    startColor.g + (endColor.g - startColor.g) * normalizedFreq
-  );
-  const b = Math.round(
-    startColor.b + (endColor.b - startColor.b) * normalizedFreq
-  );
-
-  const textColor = `rgb(${r}, ${g}, ${b})`;
-  const bgColor = `rgba(${r}, ${g}, ${b}, ${intensity * 0.2})`;
-
   return {
-    color: textColor,
-    bgColor: bgColor,
+    color: singleColor,
+    bgColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${intensity * 0.3})`,
   };
 }
 
@@ -133,78 +103,119 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
     : null;
 }
 
-// Apply highlight style to element
+// Helper function to reset element styles
+function resetElementStyles(element: HTMLElement): void {
+  element.style.backgroundColor = "";
+  element.style.color = "";
+  element.style.textDecoration = "";
+  element.style.textDecorationColor = "";
+  element.style.textDecorationThickness = "";
+  element.style.textDecorationStyle = "";
+  element.style.textShadow = "";
+  element.style.boxShadow = "";
+  element.style.outline = "";
+  element.style.filter = "";
+  element.removeAttribute("data-frequency");
+  element.style.removeProperty("--frequency-content");
+}
+
+// Apply highlight style to element (layout-shift-free)
 export function applyHighlightStyle(
   element: HTMLElement,
   colors: { color: string; bgColor: string },
   style: HighlightStyle,
-  customCSS: string = ""
+  useFrequencyColors: boolean = true,
+  frequency: number | null = null,
+  showFrequencyOnHover: boolean = false
 ): void {
   // Reset all styles first
-  element.style.backgroundColor = "";
-  element.style.color = "";
-  element.style.textDecoration = "";
-  element.style.borderBottom = "";
-  element.style.cssText = "";
+  resetElementStyles(element);
 
+  // Use provided colors or fallback to neutral
+  const finalColors = useFrequencyColors
+    ? colors
+    : {
+        color: "#666666",
+        bgColor: "rgba(128, 128, 128, 0.2)",
+      };
+
+  // Apply frequency hover if enabled
+  if (showFrequencyOnHover && frequency !== null) {
+    element.setAttribute("data-frequency", frequency.toString());
+    element.style.setProperty("--frequency-content", `"${frequency}"`);
+  }
+
+  // Apply highlighting based on style (all layout-shift-free)
   switch (style) {
-    case "highlight":
-      element.style.backgroundColor = colors.bgColor;
-      element.style.color = colors.color;
-      break;
-
     case "underline":
-      element.style.textDecoration = "none";
-      element.style.borderBottom = `2px solid ${colors.color}`;
+      element.style.textDecorationLine = "underline";
+      element.style.textDecorationColor = finalColors.color;
+      element.style.textDecorationThickness = "2px";
       break;
 
-    case "color":
-      element.style.color = colors.color;
+    case "background":
+      element.style.backgroundColor = finalColors.bgColor;
+      element.style.color = finalColors.color;
       break;
 
-    case "custom":
-      if (customCSS) {
-        // Apply custom CSS with color variables
-        const processedCSS = customCSS
-          .replace(/\$\{color\}/g, colors.color)
-          .replace(/\$\{bgColor\}/g, colors.bgColor);
-        element.style.cssText = processedCSS;
-      } else {
-        // Fallback to highlight style
-        element.style.backgroundColor = colors.bgColor;
-        element.style.color = colors.color;
-      }
+    case "outline":
+      element.style.textShadow = `
+        -1px -1px 0 ${finalColors.color},
+        1px -1px 0 ${finalColors.color},
+        -1px 1px 0 ${finalColors.color},
+        1px 1px 0 ${finalColors.color}
+      `;
       break;
 
-    case "rainbow":
-      element.style.textDecoration = "none";
-      element.style.borderBottom = "3px solid transparent";
-      element.style.backgroundImage =
-        "linear-gradient(90deg, #ff0000, #ff8000, #ffff00, #80ff00, #00ff00, #00ff80, #00ffff, #0080ff, #0000ff, #8000ff, #ff00ff, #ff0080)";
-      element.style.backgroundSize = "100% 3px";
-      element.style.backgroundRepeat = "no-repeat";
-      element.style.backgroundPosition = "0 100%";
-      element.style.animation = "rainbow-shift 3s linear infinite";
+    case "dots":
+      element.style.textDecorationLine = "underline";
+      element.style.textDecorationStyle = "dotted";
+      element.style.textDecorationColor = finalColors.color;
+      element.style.textDecorationThickness = "2px";
       break;
   }
 }
 
-// Generate CSS for frequency highlighting with gradient system
+// Generate CSS for frequency highlighting (layout-shift-free)
 export function generateFrequencyCSS(intensity: number = 0.7): string {
   return `
     .seer-word-unknown {
-      border-radius: 2px !important;
-      padding: 1px 2px !important;
-      margin: 0 1px !important;
       cursor: pointer !important;
-      transition: all 0.2s ease !important;
-      font-weight: 500 !important;
+      transition: filter 0.2s ease !important;
+      position: relative !important;
     }
     
     .seer-word-unknown:hover {
-      transform: scale(1.05) !important;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
       filter: brightness(1.1) !important;
+    }
+
+    /* Frequency hover badge (positioned outside normal flow) */
+    .seer-word-unknown[data-frequency]::before {
+      content: var(--frequency-content) !important;
+      position: absolute !important;
+      top: -16px !important;
+      right: -8px !important;
+      background: rgba(0, 0, 0, 0.9) !important;
+      color: white !important;
+      font-size: 10px !important;
+      font-weight: bold !important;
+      padding: 3px 6px !important;
+      border-radius: 12px !important;
+      min-width: 18px !important;
+      text-align: center !important;
+      opacity: 0 !important;
+      transform: translateY(-4px) scale(0.9) !important;
+      transition: all 0.2s ease !important;
+      pointer-events: none !important;
+      z-index: 1000 !important;
+      line-height: 1 !important;
+      white-space: nowrap !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    .seer-word-unknown[data-frequency]:hover::before {
+      opacity: 1 !important;
+      transform: translateY(0) scale(1) !important;
     }
   `;
 }
@@ -425,11 +436,9 @@ export async function loadSettings(): Promise<Settings> {
       colorIntensity: 0.7,
       showStats: true,
       highlightStyle: "underline",
-      gradientColors: {
-        startColor: "#00ff00", // Green for common words
-        endColor: "#ff0000", // Red for rare words
-      },
-      customCSS: "",
+      useFrequencyColors: true,
+      singleColor: "#ff6b6b",
+      showFrequencyOnHover: false,
     };
 
     chrome.storage.sync.get(defaultSettings, (result) => {

@@ -268,6 +268,107 @@
         box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
         background: white;
       }
+
+      /* Radio button styling */
+      .radio-group {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 8px;
+      }
+
+      .radio-option {
+        display: flex;
+        flex-direction: column;
+        padding: 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: white;
+      }
+
+      .radio-option:hover {
+        border-color: #4caf50;
+        background: #f8fff8;
+      }
+
+      .radio-option input[type="radio"] {
+        margin: 0 0 6px 0;
+        width: auto;
+      }
+
+      .radio-option input[type="radio"]:checked + .radio-label {
+        color: #4caf50;
+        font-weight: 600;
+      }
+
+      .radio-option:has(input[type="radio"]:checked) {
+        border-color: #4caf50;
+        background: #f0fff0;
+      }
+
+      .radio-label {
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 2px;
+      }
+
+      .radio-description {
+        font-size: 11px;
+        color: #666;
+        line-height: 1.3;
+      }
+
+      /* Preview box styling */
+      .preview-box {
+        padding: 16px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        background: #fafafa;
+        font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+        font-size: 18px;
+        line-height: 1.6;
+        text-align: center;
+        min-height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .preview-box span {
+        position: relative;
+        transition: all 0.2s ease;
+      }
+
+      /* Frequency hover badge for preview */
+      .preview-box [data-frequency]::before {
+        content: var(--frequency-content);
+        position: absolute;
+        top: -16px;
+        right: -8px;
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        font-size: 10px;
+        font-weight: bold;
+        padding: 3px 6px;
+        border-radius: 12px;
+        min-width: 18px;
+        text-align: center;
+        opacity: 0;
+        transform: translateY(-4px) scale(0.9);
+        transition: all 0.2s ease;
+        pointer-events: none;
+        z-index: 100;
+        line-height: 1;
+        white-space: nowrap;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      }
+
+      .preview-box [data-frequency]:hover::before {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
     </style>
   </head>
   <body>
@@ -391,64 +492,96 @@
         <h2>🎨 Display Settings</h2>
 
         <div class="form-group">
-          <label for="highlightStyle">Highlight Style:</label>
-          <select id="highlightStyle">
-            <option value="highlight">Highlight (Background)</option>
-            <option value="underline" selected>Underline</option>
-            <option value="color">Text Color Only</option>
-            <option value="custom">Custom CSS</option>
-          </select>
+          <label>
+            <input type="checkbox" id="highlightingEnabled" checked /> Enable
+            word highlighting
+          </label>
+          <div class="help-text">
+            Turn highlighting on or off for unknown words
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Highlight Style:</label>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input
+                type="radio"
+                name="highlightStyle"
+                value="underline"
+                checked
+              />
+              <span class="radio-label">Underline</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="highlightStyle" value="background" />
+              <span class="radio-label">Background</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="highlightStyle" value="outline" />
+              <span class="radio-label">Text Outline</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="highlightStyle" value="dots" />
+              <span class="radio-label">Subtle Dots</span>
+            </label>
+          </div>
           <div class="help-text">
             Choose how unknown words should be highlighted
           </div>
         </div>
 
         <div class="form-group">
-          <label for="colorIntensity">Color Intensity:</label>
+          <label>Color Scheme:</label>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input
+                type="radio"
+                name="colorScheme"
+                value="frequency"
+                checked
+              />
+              <span class="radio-label">Frequency Gradient</span>
+              <span class="radio-description">Green (common) → Red (rare)</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="colorScheme" value="single" />
+              <span class="radio-label">Single Color</span>
+              <span class="radio-description"
+                >All unknown words same color</span
+              >
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" id="singleColorGroup" style="display: none">
+          <label for="singleColor">Highlight Color:</label>
+          <input type="color" id="singleColor" value="#ff6b6b" />
+        </div>
+
+        <div class="form-group">
+          <label for="colorIntensity">Intensity:</label>
           <input
             type="range"
             id="colorIntensity"
-            min="0.3"
+            min="0.2"
             max="1.0"
             step="0.1"
             value="0.7"
           />
-          <span id="colorIntensityValue">0.7</span>
+          <span id="colorIntensityValue">70%</span>
           <div class="help-text">
-            Adjust how vibrant the highlighting colors appear (0.3 = subtle, 1.0
-            = vibrant)
+            Adjust how strong the highlighting appears
           </div>
         </div>
 
         <div class="form-group">
-          <label>Gradient Colors:</label>
-          <div class="color-input-group">
-            <div class="color-input-item">
-              <label for="startColor">Common words:</label>
-              <input type="color" id="startColor" value="#00ff00" />
-            </div>
-            <div class="gradient-arrow">→</div>
-            <div class="color-input-item">
-              <label for="endColor">Rare words:</label>
-              <input type="color" id="endColor" value="#ff0000" />
-            </div>
-          </div>
+          <label>
+            <input type="checkbox" id="showFrequencyOnHover" /> Show frequency
+            on hover
+          </label>
           <div class="help-text">
-            Choose colors for the frequency gradient (common → rare)
-          </div>
-        </div>
-
-        <div class="form-group" id="customCSSGroup" style="display: none">
-          <label for="customCSS">Custom CSS:</label>
-          <textarea
-            id="customCSS"
-            rows="4"
-            placeholder="color: ${color}; background-color: ${bgColor}; border: 1px solid ${color};"
-            class="custom-css-textarea"
-          ></textarea>
-          <div class="help-text">
-            Use ${color} and ${bgColor} as placeholders for frequency-based
-            colors
+            Display frequency rank as a small badge when hovering
           </div>
         </div>
 
@@ -457,26 +590,20 @@
             <input type="checkbox" id="showStats" checked /> Show statistics
             overlay
           </label>
+          <div class="help-text">
+            Display reading statistics in the corner of pages
+          </div>
         </div>
 
         <div class="form-group">
           <label>Preview:</label>
-          <div
-            id="stylePreview"
-            style="
-              padding: 10px;
-              border: 1px solid #e0e0e0;
-              border-radius: 4px;
-              background: #fafafa;
-              font-family: serif;
-              font-size: 16px;
-            "
-          >
-            これは<span id="previewWord1" style="margin: 0 2px">テスト</span
-            >の<span id="previewWord2" style="margin: 0 2px">文章</span>です。
+          <div id="stylePreview" class="preview-box">
+            これは<span id="previewWord1">テスト</span>の<span id="previewWord2"
+              >文章</span
+            >です。
           </div>
           <div class="help-text">
-            Preview of how highlighting will appear on Japanese text
+            Live preview of how highlighting will appear
           </div>
         </div>
 

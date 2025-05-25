@@ -11,9 +11,10 @@ import {
   initializeFrequencyDB,
   getFrequencyRank,
   getColorForFrequency,
-  getColorFromGradient,
+  getSingleColor,
   applyHighlightStyle,
   loadSettings,
+  generateFrequencyCSS,
 } from "./frequency-db";
 import {
   getIgnoredWordsSettings,
@@ -24,7 +25,7 @@ import {
 } from "./anki-connect";
 import { segmentJapanese, TokenSegment } from "./kuromoji-tokenizer";
 
-const CLS = "seer-unknown";
+const CLS = "seer-word-unknown";
 
 // Kuromoji tokenizer is now used instead of Intl.Segmenter
 // The segmentJapanese function provides the tokenization functionality
@@ -34,11 +35,9 @@ let settings = {
   colorIntensity: 0.7,
   showStats: true,
   highlightStyle: "underline" as HighlightStyle,
-  gradientColors: {
-    startColor: "#00ff00",
-    endColor: "#ff0000",
-  } as GradientColors,
-  customCSS: "",
+  useFrequencyColors: true,
+  singleColor: "#ff6b6b",
+  showFrequencyOnHover: false,
 };
 
 // Highlight state
@@ -369,16 +368,10 @@ function toggleI1SentenceMode(enabled: boolean): void {
 
 // Dynamic CSS for gradient highlighting
 const style = document.createElement("style");
-style.textContent = `
-  .${CLS} {
-    border-radius: 2px !important;
-    padding: 1px 2px !important;
-    margin: 0 1px !important;
-    cursor: pointer !important;
-    transition: all 0.2s ease !important;
-    font-weight: 500 !important;
-    position: relative;
-  }
+
+function updateCSS(): void {
+  style.textContent = `
+  ${generateFrequencyCSS(settings.colorIntensity)}
   
   @keyframes fadeIn {
     to { opacity: 1; }
@@ -491,6 +484,10 @@ style.textContent = `
     color: #ff5722;
   }
 `;
+}
+
+// Initialize CSS
+updateCSS();
 document.head.appendChild(style);
 
 // Create stats overlay
@@ -1375,27 +1372,19 @@ async function applyFrequencyColoring(
       pageFrequencyCache.set(word, frequency);
     }
 
-    // Get colors based on frequency and gradient settings
-    let colors;
-    if (
-      settings.gradientColors.startColor &&
-      settings.gradientColors.endColor
-    ) {
-      colors = getColorFromGradient(
-        frequency,
-        settings.gradientColors,
-        settings.colorIntensity
-      );
-    } else {
-      colors = getColorForFrequency(frequency, settings.colorIntensity);
-    }
+    // Get colors based on frequency and settings
+    const colors = settings.useFrequencyColors
+      ? getColorForFrequency(frequency, settings.colorIntensity)
+      : getSingleColor(settings.singleColor, settings.colorIntensity);
 
     // Apply the selected highlight style
     applyHighlightStyle(
       element,
       colors,
       settings.highlightStyle,
-      settings.customCSS
+      settings.useFrequencyColors,
+      frequency,
+      settings.showFrequencyOnHover
     );
   } catch (error) {
     console.warn(`❌ Error applying frequency coloring for "${word}":`, error);
@@ -1577,16 +1566,19 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
           }
         }
 
+        // Update CSS if color intensity changed
+        if (oldSettings.colorIntensity !== settings.colorIntensity) {
+          updateCSS();
+        }
+
         // Re-apply highlighting if color-related settings changed and highlights are enabled
         if (
           highlightsEnabled &&
           (oldSettings.colorIntensity !== settings.colorIntensity ||
             oldSettings.highlightStyle !== settings.highlightStyle ||
-            oldSettings.gradientColors.startColor !==
-              settings.gradientColors.startColor ||
-            oldSettings.gradientColors.endColor !==
-              settings.gradientColors.endColor ||
-            oldSettings.customCSS !== settings.customCSS)
+            oldSettings.useFrequencyColors !== settings.useFrequencyColors ||
+            oldSettings.singleColor !== settings.singleColor ||
+            oldSettings.showFrequencyOnHover !== settings.showFrequencyOnHover)
         ) {
           console.log("🎨 Color settings changed, re-applying highlighting...");
           await reapplyHighlighting();

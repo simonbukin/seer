@@ -1,7 +1,12 @@
-import { getFrequencyStats, refreshFrequencyData } from "./frequency-db";
+import {
+  getFrequencyStats,
+  refreshFrequencyData,
+  getColorForFrequency,
+  getSingleColor,
+  applyHighlightStyle,
+} from "./frequency-db";
 import {
   HighlightStyle,
-  GradientColors,
   IgnoredWordsSettings,
   RawAnkiConnectResponse,
 } from "./types";
@@ -18,8 +23,9 @@ interface Settings {
   colorIntensity: number;
   showStats: boolean;
   highlightStyle: HighlightStyle;
-  gradientColors: GradientColors;
-  customCSS: string;
+  useFrequencyColors: boolean;
+  singleColor: string;
+  showFrequencyOnHover: boolean;
 }
 
 // Default settings
@@ -29,11 +35,9 @@ const defaultSettings: Settings = {
   colorIntensity: 0.7,
   showStats: true,
   highlightStyle: "underline",
-  gradientColors: {
-    startColor: "#00ff00",
-    endColor: "#ff0000",
-  },
-  customCSS: "",
+  useFrequencyColors: true,
+  singleColor: "#ff6b6b",
+  showFrequencyOnHover: false,
 };
 
 // Helper function to send messages to background script
@@ -194,19 +198,20 @@ async function testConnection(): Promise<void> {
 
     showStatus(
       "deckStatus",
-      `AnkiConnect working! Version: ${result.result}`,
+      `AnkiConnect connected successfully (version ${result.result})`,
       "success"
     );
   } catch (error) {
+    console.error("AnkiConnect test failed:", error);
     showStatus(
       "deckStatus",
-      "Failed to connect to AnkiConnect. Make sure Anki is running with AnkiConnect addon installed.",
+      "Failed to connect to AnkiConnect. Make sure Anki is running with the AnkiConnect add-on installed.",
       "error"
     );
   }
 }
 
-// Load frequency database stats
+// Load frequency database statistics
 async function loadFrequencyStats(): Promise<void> {
   try {
     const stats = await getFrequencyStats();
@@ -217,8 +222,7 @@ async function loadFrequencyStats(): Promise<void> {
       stats.cacheSize.toLocaleString();
 
     // Estimate database size (rough calculation)
-    const estimatedSize =
-      Math.round(((stats.totalEntries * 50) / 1024 / 1024) * 10) / 10; // ~50 bytes per entry
+    const estimatedSize = Math.round((stats.totalEntries * 50) / 1024 / 1024);
     document.getElementById("dbSize")!.textContent = `${estimatedSize} MB`;
   } catch (error) {
     console.error("Failed to load frequency stats:", error);
@@ -228,34 +232,53 @@ async function loadFrequencyStats(): Promise<void> {
   }
 }
 
-// Initialize the options page
+// Initialize options page
 async function initializeOptions(): Promise<void> {
-  // Load current settings
-  const settings = await loadSettings();
-
-  // Load decks first, then set the selected values
-  await loadDecks();
-
-  // Now set the deck values after decks are loaded
-  (document.getElementById("primaryDeck") as HTMLSelectElement).value =
-    settings.primaryDeck;
-
-  // Set display settings form fields
-  (document.getElementById("colorIntensity") as HTMLInputElement).value =
-    settings.colorIntensity.toString();
-  (document.getElementById("showStats") as HTMLInputElement).checked =
-    settings.showStats;
-  (document.getElementById("highlightStyle") as HTMLSelectElement).value =
-    settings.highlightStyle;
-  (document.getElementById("startColor") as HTMLInputElement).value =
-    settings.gradientColors.startColor;
-  (document.getElementById("endColor") as HTMLInputElement).value =
-    settings.gradientColors.endColor;
-  (document.getElementById("customCSS") as HTMLTextAreaElement).value =
-    settings.customCSS;
-
-  // Load ignored words settings
   try {
+    const settings = await loadSettings();
+
+    // Set deck configuration
+    (document.getElementById("primaryDeck") as HTMLSelectElement).value =
+      settings.primaryDeck;
+    (document.getElementById("wordField") as HTMLSelectElement).value =
+      settings.wordField;
+
+    // Set display settings
+    (
+      document.getElementById("highlightingEnabled") as HTMLInputElement
+    ).checked = true;
+    (
+      document.querySelector(
+        `input[name="highlightStyle"][value="${settings.highlightStyle}"]`
+      ) as HTMLInputElement
+    ).checked = true;
+    (
+      document.querySelector(
+        `input[name="colorScheme"][value="${
+          settings.useFrequencyColors ? "frequency" : "single"
+        }"]`
+      ) as HTMLInputElement
+    ).checked = true;
+    (document.getElementById("singleColor") as HTMLInputElement).value =
+      settings.singleColor;
+    (document.getElementById("colorIntensity") as HTMLInputElement).value =
+      settings.colorIntensity.toString();
+    (
+      document.getElementById("showFrequencyOnHover") as HTMLInputElement
+    ).checked = settings.showFrequencyOnHover;
+    (document.getElementById("showStats") as HTMLInputElement).checked =
+      settings.showStats;
+
+    // Update intensity display
+    updateIntensityDisplay();
+
+    // Update color scheme visibility
+    updateColorSchemeVisibility();
+
+    // Update preview
+    updateStylePreview();
+
+    // Load ignored words settings
     const ignoredSettings = await getIgnoredWordsSettings();
     (
       document.getElementById("ignoredWordsEnabled") as HTMLInputElement
@@ -266,421 +289,223 @@ async function initializeOptions(): Promise<void> {
       ignoredSettings.noteType;
     (document.getElementById("ignoredFieldName") as HTMLInputElement).value =
       ignoredSettings.fieldName;
+
+    // Load frequency stats
+    await loadFrequencyStats();
   } catch (error) {
-    console.warn("Failed to load ignored words settings:", error);
-  }
-
-  // Update color intensity display
-  const colorIntensityValue = document.getElementById("colorIntensityValue");
-  if (colorIntensityValue) {
-    colorIntensityValue.textContent = settings.colorIntensity.toString();
-  }
-
-  // Show/hide custom CSS based on highlight style
-  updateCustomCSSVisibility();
-
-  // Update preview
-  updateStylePreview();
-
-  // Load frequency stats
-  await loadFrequencyStats();
-
-  // If primary deck is set, load its fields
-  if (settings.primaryDeck) {
-    await loadFields(settings.primaryDeck);
-    (document.getElementById("wordField") as HTMLSelectElement).value =
-      settings.wordField;
+    console.error("Failed to initialize options:", error);
   }
 }
 
-// Update custom CSS visibility based on highlight style
-function updateCustomCSSVisibility(): void {
-  const highlightStyle = (
-    document.getElementById("highlightStyle") as HTMLSelectElement
-  ).value;
-  const customCSSGroup = document.getElementById("customCSSGroup");
-  if (customCSSGroup) {
-    customCSSGroup.style.display =
-      highlightStyle === "custom" ? "block" : "none";
+// Update intensity display
+function updateIntensityDisplay(): void {
+  const slider = document.getElementById("colorIntensity") as HTMLInputElement;
+  const display = document.getElementById("colorIntensityValue");
+  if (display) {
+    display.textContent = `${Math.round(parseFloat(slider.value) * 100)}%`;
+  }
+}
+
+// Update color scheme visibility
+function updateColorSchemeVisibility(): void {
+  const useFrequency =
+    (
+      document.querySelector(
+        'input[name="colorScheme"]:checked'
+      ) as HTMLInputElement
+    )?.value === "frequency";
+  const singleColorGroup = document.getElementById("singleColorGroup");
+  if (singleColorGroup) {
+    singleColorGroup.style.display = useFrequency ? "none" : "block";
   }
 }
 
 // Update style preview
 function updateStylePreview(): void {
   const highlightStyle = (
-    document.getElementById("highlightStyle") as HTMLSelectElement
-  ).value as HighlightStyle;
+    document.querySelector(
+      'input[name="highlightStyle"]:checked'
+    ) as HTMLInputElement
+  )?.value as HighlightStyle;
+  const useFrequencyColors =
+    (
+      document.querySelector(
+        'input[name="colorScheme"]:checked'
+      ) as HTMLInputElement
+    )?.value === "frequency";
+  const singleColor = (
+    document.getElementById("singleColor") as HTMLInputElement
+  ).value;
   const colorIntensity = parseFloat(
     (document.getElementById("colorIntensity") as HTMLInputElement).value
   );
-  const startColor = (document.getElementById("startColor") as HTMLInputElement)
-    .value;
-  const endColor = (document.getElementById("endColor") as HTMLInputElement)
-    .value;
-  const customCSS = (
-    document.getElementById("customCSS") as HTMLTextAreaElement
-  ).value;
+  const showFrequencyOnHover = (
+    document.getElementById("showFrequencyOnHover") as HTMLInputElement
+  ).checked;
 
   const previewWord1 = document.getElementById("previewWord1");
   const previewWord2 = document.getElementById("previewWord2");
 
   if (previewWord1 && previewWord2) {
-    // Simulate common word (frequency 100) and rare word (frequency 10000)
-    const commonColors = getPreviewColors(
-      100,
-      startColor,
-      endColor,
-      colorIntensity
+    // Simulate common word (frequency 500) and rare word (frequency 50000)
+    const commonColors = useFrequencyColors
+      ? getColorForFrequency(500, colorIntensity)
+      : getSingleColor(singleColor, colorIntensity);
+
+    const rareColors = useFrequencyColors
+      ? getColorForFrequency(50000, colorIntensity)
+      : getSingleColor(singleColor, colorIntensity);
+
+    applyHighlightStyle(
+      previewWord1,
+      commonColors,
+      highlightStyle,
+      useFrequencyColors,
+      500,
+      showFrequencyOnHover
     );
-    const rareColors = getPreviewColors(
-      10000,
-      startColor,
-      endColor,
-      colorIntensity
+    applyHighlightStyle(
+      previewWord2,
+      rareColors,
+      highlightStyle,
+      useFrequencyColors,
+      50000,
+      showFrequencyOnHover
     );
-
-    applyPreviewStyle(previewWord1, commonColors, highlightStyle, customCSS);
-    applyPreviewStyle(previewWord2, rareColors, highlightStyle, customCSS);
   }
-}
-
-// Get preview colors for a given frequency
-function getPreviewColors(
-  frequency: number,
-  startColor: string,
-  endColor: string,
-  intensity: number
-): { color: string; bgColor: string } {
-  const logFreq = Math.log10(frequency);
-  const minLog = Math.log10(1);
-  const maxLog = Math.log10(500000);
-  const normalizedFreq = Math.min(
-    1.0,
-    Math.max(0.0, (logFreq - minLog) / (maxLog - minLog))
-  );
-
-  const startRgb = hexToRgb(startColor);
-  const endRgb = hexToRgb(endColor);
-
-  if (!startRgb || !endRgb) {
-    return { color: "#333333", bgColor: "rgba(128, 128, 128, 0.15)" };
-  }
-
-  const r = Math.round(startRgb.r + (endRgb.r - startRgb.r) * normalizedFreq);
-  const g = Math.round(startRgb.g + (endRgb.g - startRgb.g) * normalizedFreq);
-  const b = Math.round(startRgb.b + (endRgb.b - startRgb.b) * normalizedFreq);
-
-  return {
-    color: `rgb(${r}, ${g}, ${b})`,
-    bgColor: `rgba(${r}, ${g}, ${b}, ${intensity * 0.2})`,
-  };
-}
-
-// Apply preview style to element
-function applyPreviewStyle(
-  element: HTMLElement,
-  colors: { color: string; bgColor: string },
-  style: HighlightStyle,
-  customCSS: string
-): void {
-  // Reset styles
-  element.style.backgroundColor = "";
-  element.style.color = "";
-  element.style.textDecoration = "";
-  element.style.borderBottom = "";
-  element.style.cssText = "";
-
-  switch (style) {
-    case "highlight":
-      element.style.backgroundColor = colors.bgColor;
-      element.style.color = colors.color;
-      break;
-
-    case "underline":
-      element.style.textDecoration = "none";
-      element.style.borderBottom = `2px solid ${colors.color}`;
-      break;
-
-    case "color":
-      element.style.color = colors.color;
-      break;
-
-    case "custom":
-      if (customCSS) {
-        const processedCSS = customCSS
-          .replace(/\$\{color\}/g, colors.color)
-          .replace(/\$\{bgColor\}/g, colors.bgColor);
-        element.style.cssText = processedCSS;
-      } else {
-        element.style.backgroundColor = colors.bgColor;
-        element.style.color = colors.color;
-      }
-      break;
-  }
-}
-
-// Helper function to convert hex to RGB
-function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result
-    ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16),
-      }
-    : null;
 }
 
 // Event listeners
-document.addEventListener("DOMContentLoaded", () => {
-  initializeOptions();
+document.addEventListener("DOMContentLoaded", async () => {
+  await initializeOptions();
 
-  // Primary deck change handler
-  document
-    .getElementById("primaryDeck")
-    ?.addEventListener("change", async (e) => {
-      const deckName = (e.target as HTMLSelectElement).value;
-      await loadFields(deckName);
-    });
+  // Deck configuration events
+  document.getElementById("primaryDeck")?.addEventListener("change", (e) => {
+    const deckName = (e.target as HTMLSelectElement).value;
+    loadFields(deckName);
+  });
 
-  // Test connection button
   document
     .getElementById("testConnection")
     ?.addEventListener("click", testConnection);
+  document.getElementById("loadDecks")?.addEventListener("click", loadDecks);
 
-  // Save deck settings
-  document
-    .getElementById("saveDeckSettings")
-    ?.addEventListener("click", async () => {
-      const primaryDeck = (
-        document.getElementById("primaryDeck") as HTMLSelectElement
-      ).value;
-      const wordField = (
-        document.getElementById("wordField") as HTMLSelectElement
-      ).value;
+  // Display settings events
+  document.querySelectorAll('input[name="highlightStyle"]').forEach((radio) => {
+    radio.addEventListener("change", updateStylePreview);
+  });
 
-      await saveSettings({ primaryDeck, wordField });
-      showStatus("deckStatus", "Deck settings saved successfully", "success");
+  document.querySelectorAll('input[name="colorScheme"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      updateColorSchemeVisibility();
+      updateStylePreview();
     });
+  });
+
+  document
+    .getElementById("singleColor")
+    ?.addEventListener("change", updateStylePreview);
+
+  document.getElementById("colorIntensity")?.addEventListener("input", () => {
+    updateIntensityDisplay();
+    updateStylePreview();
+  });
+
+  document
+    .getElementById("showFrequencyOnHover")
+    ?.addEventListener("change", updateStylePreview);
 
   // Save display settings
   document
     .getElementById("saveDisplaySettings")
     ?.addEventListener("click", async () => {
-      const colorIntensity = parseFloat(
-        (document.getElementById("colorIntensity") as HTMLInputElement).value
-      );
-      const showStats = (
-        document.getElementById("showStats") as HTMLInputElement
-      ).checked;
-      const highlightStyle = (
-        document.getElementById("highlightStyle") as HTMLSelectElement
-      ).value as HighlightStyle;
-      const startColor = (
-        document.getElementById("startColor") as HTMLInputElement
-      ).value;
-      const endColor = (document.getElementById("endColor") as HTMLInputElement)
-        .value;
-      const customCSS = (
-        document.getElementById("customCSS") as HTMLTextAreaElement
-      ).value;
-
-      await saveSettings({
-        colorIntensity,
-        showStats,
-        highlightStyle,
-        gradientColors: { startColor, endColor },
-        customCSS,
-      });
-      showStatus(
-        "displayStatus",
-        "Display settings saved successfully",
-        "success"
-      );
-    });
-
-  // Highlight style change handler
-  document.getElementById("highlightStyle")?.addEventListener("change", () => {
-    updateCustomCSSVisibility();
-    updateStylePreview();
-  });
-
-  // Color intensity slider real-time update
-  document.getElementById("colorIntensity")?.addEventListener("input", (e) => {
-    const value = (e.target as HTMLInputElement).value;
-    const valueDisplay = document.getElementById("colorIntensityValue");
-    if (valueDisplay) {
-      valueDisplay.textContent = value;
-    }
-    updateStylePreview();
-  });
-
-  // Gradient color change handlers
-  document
-    .getElementById("startColor")
-    ?.addEventListener("change", updateStylePreview);
-  document
-    .getElementById("endColor")
-    ?.addEventListener("change", updateStylePreview);
-  document
-    .getElementById("customCSS")
-    ?.addEventListener("input", updateStylePreview);
-
-  // Refresh frequency data
-  document
-    .getElementById("refreshFrequency")
-    ?.addEventListener("click", async () => {
-      showStatus("frequencyStatus", "Refreshing frequency data...", "info");
       try {
-        await refreshFrequencyData();
-        await loadFrequencyStats();
+        const highlightStyle = (
+          document.querySelector(
+            'input[name="highlightStyle"]:checked'
+          ) as HTMLInputElement
+        )?.value as HighlightStyle;
+        const useFrequencyColors =
+          (
+            document.querySelector(
+              'input[name="colorScheme"]:checked'
+            ) as HTMLInputElement
+          )?.value === "frequency";
+        const singleColor = (
+          document.getElementById("singleColor") as HTMLInputElement
+        ).value;
+        const colorIntensity = parseFloat(
+          (document.getElementById("colorIntensity") as HTMLInputElement).value
+        );
+        const showFrequencyOnHover = (
+          document.getElementById("showFrequencyOnHover") as HTMLInputElement
+        ).checked;
+        const showStats = (
+          document.getElementById("showStats") as HTMLInputElement
+        ).checked;
+
+        await saveSettings({
+          highlightStyle,
+          useFrequencyColors,
+          singleColor,
+          colorIntensity,
+          showFrequencyOnHover,
+          showStats,
+        });
+
         showStatus(
-          "frequencyStatus",
-          "Frequency data refreshed successfully",
+          "displayStatus",
+          "Display settings saved successfully",
           "success"
         );
       } catch (error) {
-        showStatus(
-          "frequencyStatus",
-          "Failed to refresh frequency data",
-          "error"
-        );
+        console.error("Failed to save display settings:", error);
+        showStatus("displayStatus", "Failed to save display settings", "error");
       }
     });
 
-  // Clear and re-download frequency data
+  // Save deck settings
   document
-    .getElementById("clearFrequency")
+    .getElementById("saveDeckSettings")
     ?.addEventListener("click", async () => {
-      if (
-        confirm(
-          "This will delete all frequency data and re-download it. This may take a few minutes. Continue?"
-        )
-      ) {
-        showStatus(
-          "frequencyStatus",
-          "Clearing and re-downloading frequency data...",
-          "info"
-        );
-        try {
-          await refreshFrequencyData();
-          await loadFrequencyStats();
-          showStatus(
-            "frequencyStatus",
-            "Frequency data cleared and re-downloaded successfully",
-            "success"
-          );
-        } catch (error) {
-          showStatus(
-            "frequencyStatus",
-            "Failed to clear and re-download frequency data",
-            "error"
-          );
-        }
-      }
-    });
-
-  // Export frequency data
-  document.getElementById("exportFrequency")?.addEventListener("click", () => {
-    showStatus("frequencyStatus", "Export functionality coming soon", "info");
-  });
-
-  // Setup ignored words deck and note type
-  document
-    .getElementById("setupIgnoredWords")
-    ?.addEventListener("click", async () => {
-      const deckName = (
-        document.getElementById("ignoredDeckName") as HTMLInputElement
-      ).value.trim();
-      const noteType = (
-        document.getElementById("ignoredNoteType") as HTMLInputElement
-      ).value.trim();
-      const fieldName = (
-        document.getElementById("ignoredFieldName") as HTMLInputElement
-      ).value.trim();
-
-      if (!deckName || !noteType || !fieldName) {
-        showStatus("ignoredStatus", "Please fill in all fields", "error");
-        return;
-      }
-
       try {
-        showStatus("ignoredStatus", "Setting up deck and note type...", "info");
+        const primaryDeck = (
+          document.getElementById("primaryDeck") as HTMLSelectElement
+        ).value;
+        const wordField = (
+          document.getElementById("wordField") as HTMLSelectElement
+        ).value;
 
-        // Check AnkiConnect first
-        const ankiAvailable = await checkAnkiConnect();
-        if (!ankiAvailable) {
-          showStatus(
-            "ignoredStatus",
-            "AnkiConnect not available. Make sure Anki is running.",
-            "error"
-          );
-          return;
-        }
+        await saveSettings({
+          primaryDeck,
+          wordField,
+        });
 
-        const settings: IgnoredWordsSettings = {
-          deckName,
-          noteType,
-          fieldName,
-          enabled: true,
-        };
-
-        const success = await setupIgnoredWords(settings);
-        if (success) {
-          showStatus(
-            "ignoredStatus",
-            "Deck and note type setup successfully",
-            "success"
-          );
-        } else {
-          showStatus(
-            "ignoredStatus",
-            "Failed to setup deck and note type",
-            "error"
-          );
-        }
+        showStatus("deckStatus", "Deck settings saved successfully", "success");
       } catch (error) {
-        console.error("Setup failed:", error);
-        showStatus(
-          "ignoredStatus",
-          "Setup failed: " + (error as Error).message,
-          "error"
-        );
+        console.error("Failed to save deck settings:", error);
+        showStatus("deckStatus", "Failed to save deck settings", "error");
       }
     });
 
-  // Save ignored words settings
+  // Ignored words events
   document
     .getElementById("saveIgnoredSettings")
     ?.addEventListener("click", async () => {
-      const enabled = (
-        document.getElementById("ignoredWordsEnabled") as HTMLInputElement
-      ).checked;
-      const deckName = (
-        document.getElementById("ignoredDeckName") as HTMLInputElement
-      ).value.trim();
-      const noteType = (
-        document.getElementById("ignoredNoteType") as HTMLInputElement
-      ).value.trim();
-      const fieldName = (
-        document.getElementById("ignoredFieldName") as HTMLInputElement
-      ).value.trim();
-
-      if (enabled && (!deckName || !noteType || !fieldName)) {
-        showStatus(
-          "ignoredStatus",
-          "Please fill in all fields when enabling ignored words",
-          "error"
-        );
-        return;
-      }
-
       try {
         const settings: IgnoredWordsSettings = {
-          deckName,
-          noteType,
-          fieldName,
-          enabled,
+          enabled: (
+            document.getElementById("ignoredWordsEnabled") as HTMLInputElement
+          ).checked,
+          deckName: (
+            document.getElementById("ignoredDeckName") as HTMLInputElement
+          ).value,
+          noteType: (
+            document.getElementById("ignoredNoteType") as HTMLInputElement
+          ).value,
+          fieldName: (
+            document.getElementById("ignoredFieldName") as HTMLInputElement
+          ).value,
         };
 
         await saveIgnoredWordsSettings(settings);
@@ -690,12 +515,69 @@ document.addEventListener("DOMContentLoaded", () => {
           "success"
         );
       } catch (error) {
-        console.error("Save failed:", error);
+        console.error("Failed to save ignored words settings:", error);
         showStatus(
           "ignoredStatus",
-          "Failed to save settings: " + (error as Error).message,
+          "Failed to save ignored words settings",
           "error"
         );
       }
     });
+
+  document
+    .getElementById("setupIgnoredWords")
+    ?.addEventListener("click", async () => {
+      try {
+        const settings: IgnoredWordsSettings = {
+          enabled: (
+            document.getElementById("ignoredWordsEnabled") as HTMLInputElement
+          ).checked,
+          deckName: (
+            document.getElementById("ignoredDeckName") as HTMLInputElement
+          ).value,
+          noteType: (
+            document.getElementById("ignoredNoteType") as HTMLInputElement
+          ).value,
+          fieldName: (
+            document.getElementById("ignoredFieldName") as HTMLInputElement
+          ).value,
+        };
+
+        await setupIgnoredWords(settings);
+        showStatus(
+          "ignoredStatus",
+          "Ignored words deck and note type created successfully",
+          "success"
+        );
+      } catch (error) {
+        console.error("Failed to setup ignored words:", error);
+        showStatus("ignoredStatus", "Failed to setup ignored words", "error");
+      }
+    });
+
+  // Frequency database events
+  document
+    .getElementById("refreshFrequency")
+    ?.addEventListener("click", async () => {
+      try {
+        showStatus("frequencyStatus", "Refreshing frequency data...", "info");
+        await refreshFrequencyData();
+        await loadFrequencyStats();
+        showStatus(
+          "frequencyStatus",
+          "Frequency data refreshed successfully",
+          "success"
+        );
+      } catch (error) {
+        console.error("Failed to refresh frequency data:", error);
+        showStatus(
+          "frequencyStatus",
+          "Failed to refresh frequency data",
+          "error"
+        );
+      }
+    });
+
+  // Load decks on page load
+  await loadDecks();
 });
