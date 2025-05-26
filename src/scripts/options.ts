@@ -18,6 +18,7 @@ import {
   GetIgnoredWordsCountResponse,
 } from "./types";
 import { setupIgnoredWords, checkAnkiConnect } from "./anki-connect";
+import { debug } from "./debug";
 
 interface Settings {
   colorIntensity: number;
@@ -27,6 +28,7 @@ interface Settings {
   singleColor: string;
   showFrequencyOnHover: boolean;
   vocabularyGoal: number;
+  debugMode: boolean;
 }
 
 // Default settings
@@ -38,6 +40,7 @@ const defaultSettings: Settings = {
   singleColor: "#ff6b6b",
   showFrequencyOnHover: false,
   vocabularyGoal: 10000,
+  debugMode: false,
 };
 
 // Global state
@@ -556,7 +559,7 @@ async function loadFrequencyStats(): Promise<void> {
 
 // Initialize options page
 async function initializeOptions(): Promise<void> {
-  console.log("Initializing options page...");
+  debug.log("Initializing options page...");
 
   // Load settings and apply to UI
   const settings = await loadSettings();
@@ -575,6 +578,7 @@ async function initializeOptions(): Promise<void> {
   const vocabularyGoal = document.getElementById(
     "vocabularyGoal"
   ) as HTMLInputElement;
+  const debugMode = document.getElementById("debugMode") as HTMLInputElement;
 
   if (colorIntensity) {
     colorIntensity.value = settings.colorIntensity.toString();
@@ -585,6 +589,7 @@ async function initializeOptions(): Promise<void> {
     showFrequencyOnHover.checked = settings.showFrequencyOnHover;
   if (singleColor) singleColor.value = settings.singleColor;
   if (vocabularyGoal) vocabularyGoal.value = settings.vocabularyGoal.toString();
+  if (debugMode) debugMode.checked = settings.debugMode;
 
   // Set highlight style
   const highlightStyleRadios = document.querySelectorAll(
@@ -633,7 +638,7 @@ async function initializeOptions(): Promise<void> {
   // Load frequency stats
   await loadFrequencyStats();
 
-  console.log("Options page initialized");
+  debug.log("Options page initialized");
 }
 
 function updateIntensityDisplay(): void {
@@ -1213,6 +1218,31 @@ document.addEventListener("DOMContentLoaded", () => {
           "Failed to save ignored words settings",
           "error"
         );
+      }
+    });
+  }
+
+  // Debug Settings Events
+  const saveDebugSettingsBtn = document.getElementById("saveDebugSettings");
+
+  if (saveDebugSettingsBtn) {
+    saveDebugSettingsBtn.addEventListener("click", async () => {
+      try {
+        const debugModeEl = document.getElementById(
+          "debugMode"
+        ) as HTMLInputElement;
+
+        if (debugModeEl) {
+          await saveSettings({ debugMode: debugModeEl.checked });
+          showStatus(
+            "debugStatus",
+            "Debug settings saved successfully",
+            "success"
+          );
+        }
+      } catch (error) {
+        console.error("Failed to save debug settings:", error);
+        showStatus("debugStatus", "Failed to save debug settings", "error");
       }
     });
   }

@@ -40,6 +40,7 @@ import {
   GetIgnoredWordsCountResponse,
 } from "./types";
 import { initializeFrequencyDB } from "./frequency-db";
+import { initializeDebugMode, setDebugMode, debug } from "./debug";
 
 let known = new Set<string>();
 let ignored = new Set<string>();
@@ -114,7 +115,7 @@ async function migrateToSources(): Promise<void> {
     return;
   }
 
-  console.log("🔄 Migrating to multi-source vocabulary system...");
+  debug.log("🔄 Migrating to multi-source vocabulary system...");
 
   const oldSettings = await loadSettings();
 
@@ -130,7 +131,7 @@ async function migrateToSources(): Promise<void> {
     };
 
     vocabSettings.sources.push(migratedSource);
-    console.log(
+    debug.log(
       `✅ Migrated deck "${oldSettings.primaryDeck}" to source "${migratedSource.name}"`
     );
   }
@@ -139,7 +140,7 @@ async function migrateToSources(): Promise<void> {
   vocabSettings.migrated = true;
   await saveVocabSettings(vocabSettings);
 
-  console.log("✅ Migration to multi-source system complete");
+  debug.log("✅ Migration to multi-source system complete");
 }
 
 // Validate a vocabulary source
@@ -267,7 +268,7 @@ async function ac(params: any): Promise<any> {
 // Fetch words from a single source
 async function loadWordsFromSource(source: VocabSource): Promise<Set<string>> {
   try {
-    console.log(
+    debug.log(
       `Loading words from source "${source.name}" (${source.deckName}:${source.fieldName})`
     );
 
@@ -291,7 +292,7 @@ async function loadWordsFromSource(source: VocabSource): Promise<Set<string>> {
       version: 6,
     });
 
-    console.log(
+    debug.log(
       `Retrieved info for ${notes.result.length} notes from source "${source.name}"`
     );
 
@@ -322,7 +323,7 @@ async function loadWordsFromSource(source: VocabSource): Promise<Set<string>> {
       }
     });
 
-    console.log(
+    debug.log(
       `Extracted ${wordsSet.size} unique words from source "${source.name}"`
     );
     return wordsSet;
@@ -346,7 +347,7 @@ async function loadKnown(): Promise<Set<string>> {
       return new Set();
     }
 
-    console.log(`Loading known words from ${sources.length} sources...`);
+    debug.log(`Loading known words from ${sources.length} sources...`);
 
     const allWords = new Set<string>();
     let totalWordsLoaded = 0;
@@ -360,19 +361,19 @@ async function loadKnown(): Promise<Set<string>> {
         sourceWords.forEach((word) => allWords.add(word));
         totalWordsLoaded += sourceWords.size;
 
-        console.log(`✅ Source "${source.name}": ${sourceWords.size} words`);
+        debug.log(`✅ Source "${source.name}": ${sourceWords.size} words`);
       } catch (error) {
         console.error(`❌ Failed to load source "${source.name}":`, error);
       }
     }
 
-    console.log(
+    debug.log(
       `📚 Total: ${allWords.size} unique words from ${totalWordsLoaded} total words across ${sources.length} sources`
     );
 
     // Log some sample words
     const sampleWords = Array.from(allWords).slice(0, 10);
-    console.log("Sample words:", sampleWords);
+    debug.verbose("Sample words:", sampleWords);
 
     return allWords;
   } catch (error) {
@@ -465,7 +466,7 @@ async function addIgnoredWord(
     });
 
     if (existingNotes.result.length > 0) {
-      console.log(`Word "${word}" already in ignored deck`);
+      debug.log(`Word "${word}" already in ignored deck`);
       // Still add to local set for immediate effect
       ignored.add(word);
       return;
@@ -512,7 +513,7 @@ async function addIgnoredWord(
             cards: findCardsResult.result,
           },
         });
-        console.log(
+        debug.log(
           `Suspended ${findCardsResult.result.length} card(s) for ignored word "${word}"`
         );
       }
@@ -520,7 +521,7 @@ async function addIgnoredWord(
 
     // Add to local ignored set for immediate effect
     ignored.add(word);
-    console.log(`Added "${word}" to ignored deck and local set`);
+    debug.log(`Added "${word}" to ignored deck and local set`);
   } catch (error) {
     throw new Error(
       `Failed to add ignored word: ${
@@ -1011,15 +1012,13 @@ async function loadIgnoredWordsFromSettings(): Promise<Set<string>> {
     );
 
     if (!ignoredSettings.enabled || !ignoredSettings.deckName) {
-      console.log("Ignored words disabled or no deck configured");
+      debug.log("Ignored words disabled or no deck configured");
       return new Set();
     }
 
-    console.log(
-      `Loading ignored words from deck: "${ignoredSettings.deckName}"`
-    );
+    debug.log(`Loading ignored words from deck: "${ignoredSettings.deckName}"`);
     const words = await getIgnoredWords(ignoredSettings);
-    console.log(`Loaded ${words.length} ignored words from new settings`);
+    debug.log(`Loaded ${words.length} ignored words from new settings`);
     return new Set(words);
   } catch (error) {
     console.error("Failed to load ignored words from new settings:", error);
@@ -1029,7 +1028,7 @@ async function loadIgnoredWordsFromSettings(): Promise<Set<string>> {
 
 // Refresh function
 async function refresh(): Promise<void> {
-  console.log("Refreshing known and ignored words from Anki...");
+  debug.log("Refreshing known and ignored words from Anki...");
   const startTime = Date.now();
 
   // Load both known and ignored words in parallel
@@ -1042,7 +1041,7 @@ async function refresh(): Promise<void> {
   ignored = ignoredWords;
 
   const endTime = Date.now();
-  console.log(
+  debug.log(
     `Loaded ${known.size} known words and ${ignored.size} ignored words in ${
       endTime - startTime
     }ms`
@@ -1063,4 +1062,14 @@ refresh();
 // Initialize frequency database
 initializeFrequencyDB().catch((error) => {
   console.error("Failed to initialize frequency database:", error);
+});
+
+// Initialize debug mode
+initializeDebugMode();
+
+// Listen for storage changes to update debug mode
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === "sync" && changes.debugMode) {
+    setDebugMode(changes.debugMode.newValue);
+  }
 });

@@ -1,4 +1,5 @@
 import * as kuromoji from "@patdx/kuromoji";
+import { debug } from "./debug";
 
 // Token interface that matches what the extension expects
 export interface KuromojiToken {
@@ -28,7 +29,7 @@ class KuromojiTokenizer {
 
   private async initialize(): Promise<void> {
     try {
-      console.log("🔄 Initializing Kuromoji tokenizer...");
+      debug.log("🔄 Initializing Kuromoji tokenizer...");
 
       // Custom loader for browser environment
       const customLoader: kuromoji.LoaderConfig = {
@@ -39,7 +40,7 @@ class KuromojiTokenizer {
           // Use CDN for dictionary files
           const dictUrl = `https://cdn.jsdelivr.net/npm/@aiktb/kuromoji@1.0.2/dict/${url}`;
 
-          console.log(`📥 Loading dictionary: ${dictUrl}`);
+          debug.log(`📥 Loading dictionary: ${dictUrl}`);
 
           const response = await fetch(dictUrl);
           if (!response.ok) {
@@ -57,7 +58,7 @@ class KuromojiTokenizer {
         loader: customLoader,
       }).build();
 
-      console.log("✅ Kuromoji tokenizer initialized successfully");
+      debug.log("✅ Kuromoji tokenizer initialized successfully");
     } catch (error) {
       console.error("❌ Failed to initialize Kuromoji tokenizer:", error);
       throw error;

@@ -1,5 +1,6 @@
 import Dexie from "dexie";
 import { HighlightStyle, HighlightSettings } from "./types";
+import { debug } from "./debug";
 
 // TypeScript interfaces for frequency data
 interface FrequencyEntry {
@@ -244,7 +245,7 @@ let initializationPromise: Promise<void> | null = null;
 
 // CSV parsing function
 function parseCSV(csvText: string): FrequencyEntry[] {
-  console.log("🔍 Parsing CSV data...");
+  debug.log("🔍 Parsing CSV data...");
   const lines = csvText.trim().split("\n");
   const entries: FrequencyEntry[] = [];
 
@@ -271,14 +272,14 @@ function parseCSV(csvText: string): FrequencyEntry[] {
     }
   }
 
-  console.log(`📊 Parsed ${entries.length} frequency entries`);
+  debug.log(`📊 Parsed ${entries.length} frequency entries`);
   return entries;
 }
 
 // Download and initialize frequency data
 async function downloadAndInitializeFrequencyData(): Promise<void> {
   try {
-    console.log("📥 Downloading JPDB frequency data...");
+    debug.log("📥 Downloading JPDB frequency data...");
 
     const response = await fetch(
       "https://raw.githubusercontent.com/Kuuuube/yomitan-dictionaries/main/data/jpdb_v2.2_freq_list_2024-10-13.csv"
@@ -288,22 +289,22 @@ async function downloadAndInitializeFrequencyData(): Promise<void> {
     }
 
     const csvText = await response.text();
-    console.log(`📄 Downloaded ${csvText.length} characters of CSV data`);
+    debug.log(`📄 Downloaded ${csvText.length} characters of CSV data`);
 
     const entries = parseCSV(csvText);
 
     // Clear existing data and insert new data
-    console.log("🗑️ Clearing existing frequency data...");
+    debug.log("🗑️ Clearing existing frequency data...");
     await db.frequencies.clear();
 
-    console.log("💾 Inserting frequency data into IndexedDB...");
+    debug.log("💾 Inserting frequency data into IndexedDB...");
 
     // Use transaction to ensure atomicity
     await db.transaction("rw", db.frequencies, async () => {
       await (db.frequencies as any).bulkAdd(entries);
     });
 
-    console.log("✅ Frequency database initialized successfully");
+    debug.log("✅ Frequency database initialized successfully");
     isInitialized = true;
 
     // Populate cache with most common words for faster lookups
@@ -318,9 +319,7 @@ async function downloadAndInitializeFrequencyData(): Promise<void> {
       }
     });
 
-    console.log(
-      `🚀 Cached ${frequencyCache.size} common words for fast lookup`
-    );
+    debug.log(`🚀 Cached ${frequencyCache.size} common words for fast lookup`);
   } catch (error) {
     console.error("❌ Error initializing frequency database:", error);
     throw error;
@@ -342,7 +341,7 @@ export async function initializeFrequencyDB(): Promise<void> {
       // Check if we already have data
       const count = await db.frequencies.count();
       if (count > 0) {
-        console.log(`📚 Found ${count} existing frequency entries`);
+        debug.log(`📚 Found ${count} existing frequency entries`);
         isInitialized = true;
 
         // Populate cache
@@ -410,7 +409,7 @@ export async function getFrequencyRank(word: string): Promise<number | null> {
 
 // Force refresh frequency data
 export async function refreshFrequencyData(): Promise<void> {
-  console.log("🔄 Force refreshing frequency data...");
+  debug.log("🔄 Force refreshing frequency data...");
   isInitialized = false;
   initializationPromise = null;
   frequencyCache.clear();

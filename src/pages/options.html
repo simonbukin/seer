@@ -384,6 +384,26 @@
       </div>
 
       <div class="section">
+        <h2>🔧 Developer Settings</h2>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="debugMode" /> Enable debug mode
+          </label>
+          <div class="help-text">
+            Show detailed console logs for debugging. Disable to reduce console
+            spam.
+          </div>
+        </div>
+
+        <button id="saveDebugSettings" class="btn btn-secondary">
+          Save Debug Settings
+        </button>
+
+        <div id="debugStatus" class="status"></div>
+      </div>
+
+      <div class="section">
         <h2>ℹ️ About</h2>
         <p>
           Seer helps you learn Japanese by highlighting unknown words based on
