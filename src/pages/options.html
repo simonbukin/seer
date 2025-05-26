@@ -11,32 +11,52 @@
       <h1>🔮 Seer Options</h1>
 
       <div class="section">
-        <h2>📚 Deck Configuration</h2>
+        <h2>📚 Vocabulary Sources</h2>
 
-        <div class="form-group">
-          <label for="primaryDeck">Primary Vocabulary Deck:</label>
-          <select id="primaryDeck">
-            <option value="">Loading decks...</option>
-          </select>
-          <div class="help-text">
-            Select the deck containing your vocabulary cards
+        <div class="sources-header">
+          <p>
+            Configure multiple decks and fields to track your vocabulary
+            knowledge.
+          </p>
+          <div class="sources-header-actions">
+            <button
+              id="clearOldConfig"
+              class="btn btn-outline"
+              title="Clear old single-deck configuration"
+            >
+              Clear Old Config
+            </button>
+            <button id="addSource" class="btn btn-primary">
+              + Add New Source
+            </button>
           </div>
         </div>
 
-        <div class="form-group">
-          <label for="wordField">Word Field:</label>
-          <select id="wordField">
-            <option value="">Select deck first</option>
-          </select>
-          <div class="help-text">
-            Choose which field contains the Japanese word
+        <div id="sourcesContainer">
+          <div id="sourcesTable" class="sources-table">
+            <div class="sources-table-header">
+              <div class="source-col-name">Name</div>
+              <div class="source-col-deck">Deck</div>
+              <div class="source-col-field">Field</div>
+              <div class="source-col-status">Status</div>
+              <div class="source-col-actions">Actions</div>
+            </div>
+            <div id="sourcesTableBody" class="sources-table-body">
+              <!-- Sources will be populated here -->
+            </div>
+          </div>
+
+          <div
+            id="noSourcesMessage"
+            class="no-sources-message"
+            style="display: none"
+          >
+            <p>No vocabulary sources configured yet.</p>
+            <p>Click "Add New Source" to get started.</p>
           </div>
         </div>
 
-        <div class="anki-bar">
-          <button id="saveDeckSettings" class="btn btn-secondary">
-            Save Settings
-          </button>
+        <div class="sources-footer">
           <div class="anki-status-container">
             <div
               id="ankiStatus"
@@ -51,9 +71,111 @@
             </div>
             <span class="anki-status-label">AnkiConnect</span>
           </div>
+          <div id="sourcesStats" class="sources-stats">
+            <span id="sourcesCount">0 sources</span>
+          </div>
         </div>
 
-        <div id="deckStatus" class="status"></div>
+        <div id="sourcesStatus" class="status"></div>
+
+        <!-- Vocabulary Statistics -->
+        <div class="vocab-stats-section">
+          <h3>📊 Vocabulary Statistics</h3>
+          <div class="vocab-stats-grid">
+            <div class="total-vocab-stat">
+              <div class="total-vocab-number" id="totalVocabCount">-</div>
+              <div class="total-vocab-label">Total Known Words</div>
+            </div>
+            <div class="total-ignored-stat">
+              <div class="total-ignored-number" id="totalIgnoredCount">-</div>
+              <div class="total-ignored-label">Total Ignored Words</div>
+            </div>
+          </div>
+
+          <div class="vocab-progress-section">
+            <h4>Vocabulary Progress</h4>
+            <div class="form-group">
+              <label for="vocabularyGoal">Vocabulary Goal:</label>
+              <input
+                type="number"
+                id="vocabularyGoal"
+                min="1000"
+                max="100000"
+                step="1000"
+                value="10000"
+              />
+              <div class="help-text">
+                Target number of words for the vocabulary progress bar
+              </div>
+            </div>
+            <div class="vocab-progress-bar">
+              <div
+                class="vocab-progress-fill"
+                id="vocabProgressFill"
+                style="width: 0%"
+              ></div>
+            </div>
+            <div class="vocab-progress-text" id="vocabProgressText">
+              0 words
+            </div>
+          </div>
+
+          <div class="vocab-breakdown">
+            <h4>Sources Breakdown</h4>
+            <div id="vocabBreakdownChart" class="vocab-chart">
+              <div class="no-data-message">No vocabulary data available</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Source Modal -->
+      <div id="sourceModal" class="modal" style="display: none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="sourceModalTitle">Add Vocabulary Source</h3>
+            <button id="closeSourceModal" class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="sourceName">Source Name:</label>
+              <input
+                type="text"
+                id="sourceName"
+                placeholder="e.g., Mining Deck"
+              />
+              <div class="help-text">
+                Give this source a friendly name for easy identification
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="sourceDeck">Deck:</label>
+              <select id="sourceDeck">
+                <option value="">Loading decks...</option>
+              </select>
+              <div class="help-text">
+                Select the Anki deck containing vocabulary
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="sourceField">Field:</label>
+              <select id="sourceField">
+                <option value="">Select deck first</option>
+              </select>
+              <div class="help-text">
+                Choose which field contains the Japanese word
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button id="cancelSourceModal" class="btn btn-outline">
+              Cancel
+            </button>
+            <button id="saveSource" class="btn btn-primary">Save Source</button>
+          </div>
+        </div>
       </div>
 
       <div class="section">
@@ -65,7 +187,7 @@
             words functionality
           </label>
           <div class="help-text">
-            Allow marking words as ignored via Ctrl+click. Requires AnkiConnect.
+            Allow marking words as ignored via Alt+click. Requires AnkiConnect.
           </div>
         </div>
 

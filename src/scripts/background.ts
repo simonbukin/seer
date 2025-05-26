@@ -23,6 +23,21 @@ import {
   RawAnkiConnectMessage,
   RawAnkiConnectResponse,
   IgnoredWordsSettings,
+  VocabSource,
+  VocabSettings,
+  SourceValidationResult,
+  GetVocabSourcesMessage,
+  SaveVocabSourcesMessage,
+  ValidateVocabSourceMessage,
+  GetVocabSourcesResponse,
+  SaveVocabSourcesResponse,
+  ValidateVocabSourceResponse,
+  GetVocabStatsMessage,
+  GetVocabStatsResponse,
+  VocabStatsData,
+  VocabSourceStats,
+  GetIgnoredWordsCountMessage,
+  GetIgnoredWordsCountResponse,
 } from "./types";
 import { initializeFrequencyDB } from "./frequency-db";
 
@@ -55,6 +70,147 @@ async function loadSettings(): Promise<Settings> {
       resolve(result as Settings);
     });
   });
+}
+
+// Load vocabulary sources from Chrome storage
+async function loadVocabSettings(): Promise<VocabSettings> {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(["vocabSources", "migrated"], (result) => {
+      const vocabSettings: VocabSettings = {
+        sources: result.vocabSources || [],
+        migrated: result.migrated || false,
+      };
+      resolve(vocabSettings);
+    });
+  });
+}
+
+// Save vocabulary sources to Chrome storage
+async function saveVocabSettings(settings: VocabSettings): Promise<void> {
+  return new Promise((resolve) => {
+    chrome.storage.sync.set(
+      {
+        vocabSources: settings.sources,
+        migrated: settings.migrated,
+      },
+      () => {
+        resolve();
+      }
+    );
+  });
+}
+
+// Generate unique ID for sources
+function generateSourceId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+// Migrate old single deck configuration to new sources system
+async function migrateToSources(): Promise<void> {
+  const vocabSettings = await loadVocabSettings();
+
+  // Skip if already migrated
+  if (vocabSettings.migrated) {
+    return;
+  }
+
+  console.log("🔄 Migrating to multi-source vocabulary system...");
+
+  const oldSettings = await loadSettings();
+
+  // If there's an existing deck configuration, convert it to a source
+  if (oldSettings.primaryDeck && oldSettings.wordField) {
+    const migratedSource: VocabSource = {
+      id: generateSourceId(),
+      name: `${oldSettings.primaryDeck} (Migrated)`,
+      deckName: oldSettings.primaryDeck,
+      fieldName: oldSettings.wordField,
+      enabled: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    vocabSettings.sources.push(migratedSource);
+    console.log(
+      `✅ Migrated deck "${oldSettings.primaryDeck}" to source "${migratedSource.name}"`
+    );
+  }
+
+  // Mark as migrated
+  vocabSettings.migrated = true;
+  await saveVocabSettings(vocabSettings);
+
+  console.log("✅ Migration to multi-source system complete");
+}
+
+// Validate a vocabulary source
+async function validateVocabSource(
+  source: Omit<VocabSource, "id" | "createdAt">
+): Promise<SourceValidationResult> {
+  try {
+    // Check if deck exists
+    const deckNames = await ac({
+      action: "deckNames",
+      version: 6,
+    });
+
+    const deckExists = deckNames.result.includes(source.deckName);
+    if (!deckExists) {
+      return {
+        isValid: false,
+        error: `Deck "${source.deckName}" not found`,
+        deckExists: false,
+        fieldExists: false,
+      };
+    }
+
+    // Check if field exists by getting a sample note from the deck
+    const noteIds = await ac({
+      action: "findNotes",
+      params: { query: `deck:"${source.deckName}"` },
+      version: 6,
+    });
+
+    if (noteIds.result.length === 0) {
+      return {
+        isValid: false,
+        error: `No notes found in deck "${source.deckName}"`,
+        deckExists: true,
+        fieldExists: false,
+      };
+    }
+
+    // Get info for the first note to check field structure
+    const noteInfo = await ac({
+      action: "notesInfo",
+      params: { notes: [noteIds.result[0]] },
+      version: 6,
+    });
+
+    const fieldExists = Object.keys(noteInfo.result[0].fields).includes(
+      source.fieldName
+    );
+    if (!fieldExists) {
+      return {
+        isValid: false,
+        error: `Field "${source.fieldName}" not found in deck "${source.deckName}"`,
+        deckExists: true,
+        fieldExists: false,
+      };
+    }
+
+    return {
+      isValid: true,
+      deckExists: true,
+      fieldExists: true,
+    };
+  } catch (error) {
+    return {
+      isValid: false,
+      error: error instanceof Error ? error.message : String(error),
+      deckExists: false,
+      fieldExists: false,
+    };
+  }
 }
 
 // Save highlight enabled state
@@ -108,40 +264,24 @@ async function ac(params: any): Promise<any> {
   return result;
 }
 
-// Fetch deck and create known words set
-async function loadKnown(): Promise<Set<string>> {
+// Fetch words from a single source
+async function loadWordsFromSource(source: VocabSource): Promise<Set<string>> {
   try {
-    const settings = await loadSettings();
-    const deck = settings.primaryDeck;
-    const wordField = settings.wordField;
-
     console.log(
-      `Loading known words from deck: "${deck}", field: "${wordField}"`
+      `Loading words from source "${source.name}" (${source.deckName}:${source.fieldName})`
     );
 
-    // First, let's get all notes from the deck (including mature and learning)
+    // Get all notes from the deck
     const ids = await ac({
       action: "findNotes",
-      params: { query: `deck:"${deck}"` },
+      params: { query: `deck:"${source.deckName}"` },
       version: 6,
     });
 
-    console.log(`Found ${ids.result.length} notes in deck`);
-
     if (ids.result.length === 0) {
       console.warn(
-        `No notes found in deck "${deck}". Available decks might be:`
+        `No notes found in deck "${source.deckName}" for source "${source.name}"`
       );
-      // Try to get deck names for debugging
-      try {
-        const deckNames = await ac({
-          action: "deckNames",
-          version: 6,
-        });
-        console.log("Available decks:", deckNames.result);
-      } catch (e) {
-        console.log("Could not fetch deck names");
-      }
       return new Set();
     }
 
@@ -151,17 +291,13 @@ async function loadKnown(): Promise<Set<string>> {
       version: 6,
     });
 
-    console.log(`Retrieved info for ${notes.result.length} notes`);
-
-    // Log the first few notes to debug field structure
-    if (notes.result.length > 0) {
-      console.log("Sample note fields:", Object.keys(notes.result[0].fields));
-      console.log("First note:", notes.result[0].fields);
-    }
+    console.log(
+      `Retrieved info for ${notes.result.length} notes from source "${source.name}"`
+    );
 
     // Use the configured word field, with fallbacks
     const possibleFields = [
-      wordField,
+      source.fieldName,
       "Word",
       "Expression",
       "Front",
@@ -187,16 +323,58 @@ async function loadKnown(): Promise<Set<string>> {
     });
 
     console.log(
-      `Extracted ${wordsSet.size} unique words from ${possibleFields.join(
-        ", "
-      )} fields`
+      `Extracted ${wordsSet.size} unique words from source "${source.name}"`
+    );
+    return wordsSet;
+  } catch (error) {
+    console.error(`Failed to load words from source "${source.name}":`, error);
+    return new Set();
+  }
+}
+
+// Fetch words from all enabled sources and combine them
+async function loadKnown(): Promise<Set<string>> {
+  try {
+    // Run migration first
+    await migrateToSources();
+
+    const vocabSettings = await loadVocabSettings();
+    const sources = vocabSettings.sources;
+
+    if (sources.length === 0) {
+      console.warn("No vocabulary sources found");
+      return new Set();
+    }
+
+    console.log(`Loading known words from ${sources.length} sources...`);
+
+    const allWords = new Set<string>();
+    let totalWordsLoaded = 0;
+
+    // Load words from each source
+    for (const source of sources) {
+      try {
+        const sourceWords = await loadWordsFromSource(source);
+
+        // Add all words from this source to the combined set
+        sourceWords.forEach((word) => allWords.add(word));
+        totalWordsLoaded += sourceWords.size;
+
+        console.log(`✅ Source "${source.name}": ${sourceWords.size} words`);
+      } catch (error) {
+        console.error(`❌ Failed to load source "${source.name}":`, error);
+      }
+    }
+
+    console.log(
+      `📚 Total: ${allWords.size} unique words from ${totalWordsLoaded} total words across ${sources.length} sources`
     );
 
     // Log some sample words
-    const sampleWords = Array.from(wordsSet).slice(0, 10);
+    const sampleWords = Array.from(allWords).slice(0, 10);
     console.log("Sample words:", sampleWords);
 
-    return wordsSet;
+    return allWords;
   } catch (error) {
     console.error("Failed to load known words:", error);
     return new Set();
@@ -622,8 +800,190 @@ async function setupIgnoredWords(
         });
       return true;
     }
+
+    if (msg.type === "GET_VOCAB_SOURCES") {
+      loadVocabSettings()
+        .then((vocabSettings) => {
+          const response: GetVocabSourcesResponse = {
+            sources: vocabSettings.sources,
+            migrated: vocabSettings.migrated || false,
+          };
+          sendResponse(response);
+        })
+        .catch((error) => {
+          console.error("Failed to get vocabulary sources:", error);
+          const response: GetVocabSourcesResponse = {
+            sources: [],
+            migrated: false,
+          };
+          sendResponse(response);
+        });
+      return true;
+    }
+
+    if (msg.type === "SAVE_VOCAB_SOURCES") {
+      const saveMsg = msg as SaveVocabSourcesMessage;
+      const vocabSettings: VocabSettings = {
+        sources: saveMsg.sources,
+        migrated: true,
+      };
+
+      saveVocabSettings(vocabSettings)
+        .then(() => {
+          const response: SaveVocabSourcesResponse = { success: true };
+          sendResponse(response);
+
+          // Trigger refresh to reload vocabulary with new sources
+          refresh().catch((error) => {
+            console.error("Failed to refresh after saving sources:", error);
+          });
+        })
+        .catch((error) => {
+          console.error("Failed to save vocabulary sources:", error);
+          const response: SaveVocabSourcesResponse = {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
+          sendResponse(response);
+        });
+      return true;
+    }
+
+    if (msg.type === "VALIDATE_VOCAB_SOURCE") {
+      const validateMsg = msg as ValidateVocabSourceMessage;
+      validateVocabSource(validateMsg.source)
+        .then((result) => {
+          const response: ValidateVocabSourceResponse = result;
+          sendResponse(response);
+        })
+        .catch((error) => {
+          console.error("Failed to validate vocabulary source:", error);
+          const response: ValidateVocabSourceResponse = {
+            isValid: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
+          sendResponse(response);
+        });
+      return true;
+    }
+
+    if (msg.type === "GET_VOCAB_STATS") {
+      getVocabStats()
+        .then((stats) => {
+          const response: GetVocabStatsResponse = { stats };
+          sendResponse(response);
+        })
+        .catch((error) => {
+          console.error("Failed to get vocabulary statistics:", error);
+          const response: GetVocabStatsResponse = {
+            stats: { totalWords: 0, sourceStats: [] },
+          };
+          sendResponse(response);
+        });
+      return true;
+    }
+
+    if (msg.type === "GET_IGNORED_WORDS_COUNT") {
+      getIgnoredWordsCount()
+        .then((count: number) => {
+          const response: GetIgnoredWordsCountResponse = { count };
+          sendResponse(response);
+        })
+        .catch((error: any) => {
+          console.error("Failed to get ignored words count:", error);
+          const response: GetIgnoredWordsCountResponse = { count: 0 };
+          sendResponse(response);
+        });
+      return true;
+    }
   }
 );
+
+// Get ignored words count
+async function getIgnoredWordsCount(): Promise<number> {
+  try {
+    const ignoredWords = await loadIgnoredWordsFromSettings();
+    return ignoredWords.size;
+  } catch (error) {
+    console.error("Failed to get ignored words count:", error);
+    return 0;
+  }
+}
+
+// Get vocabulary statistics for all sources
+async function getVocabStats(): Promise<VocabStatsData> {
+  try {
+    const vocabSettings = await loadVocabSettings();
+    const sources = vocabSettings.sources;
+
+    if (sources.length === 0) {
+      return {
+        totalWords: 0,
+        sourceStats: [],
+      };
+    }
+
+    const sourceStats: VocabSourceStats[] = [];
+    let totalWords = 0;
+    const allWords = new Set<string>();
+
+    // Load words from each source and count unique words
+    for (const source of sources) {
+      try {
+        const sourceWords = await loadWordsFromSource(source);
+        const uniqueWordsFromSource = new Set<string>();
+
+        // Count words that are unique to this source (not already counted)
+        for (const word of sourceWords) {
+          if (!allWords.has(word)) {
+            uniqueWordsFromSource.add(word);
+            allWords.add(word);
+          }
+        }
+
+        sourceStats.push({
+          sourceId: source.id,
+          sourceName: source.name,
+          wordCount: uniqueWordsFromSource.size,
+          percentage: 0, // Will be calculated after we have total
+        });
+
+        totalWords += uniqueWordsFromSource.size;
+      } catch (error) {
+        console.warn(
+          `Failed to load words from source "${source.name}":`,
+          error
+        );
+        sourceStats.push({
+          sourceId: source.id,
+          sourceName: source.name,
+          wordCount: 0,
+          percentage: 0,
+        });
+      }
+    }
+
+    // Calculate percentages
+    sourceStats.forEach((stat) => {
+      stat.percentage =
+        totalWords > 0 ? (stat.wordCount / totalWords) * 100 : 0;
+    });
+
+    // Sort by word count (descending)
+    sourceStats.sort((a, b) => b.wordCount - a.wordCount);
+
+    return {
+      totalWords,
+      sourceStats,
+    };
+  } catch (error) {
+    console.error("Failed to get vocabulary statistics:", error);
+    return {
+      totalWords: 0,
+      sourceStats: [],
+    };
+  }
+}
 
 // Load ignored words using new settings
 async function loadIgnoredWordsFromSettings(): Promise<Set<string>> {
@@ -703,31 +1063,4 @@ refresh();
 // Initialize frequency database
 initializeFrequencyDB().catch((error) => {
   console.error("Failed to initialize frequency database:", error);
-});
-
-// Create context menu for options
-chrome.runtime.onInstalled.addListener(() => {
-  // Create multiple context menu items for better Arc compatibility
-  chrome.contextMenus.create({
-    id: "openOptions",
-    title: "Seer Options",
-    contexts: ["action"], // Right-click on extension icon
-  });
-
-  // Additional context menu for Arc browser compatibility
-  chrome.contextMenus.create({
-    id: "openOptionsPage",
-    title: "Open Options Page",
-    contexts: ["page"], // Right-click on any page
-  });
-});
-
-// Handle context menu clicks
-chrome.contextMenus.onClicked.addListener((info) => {
-  if (
-    info.menuItemId === "openOptions" ||
-    info.menuItemId === "openOptionsPage"
-  ) {
-    chrome.runtime.openOptionsPage();
-  }
 });

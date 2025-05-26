@@ -60,6 +60,21 @@ export interface RawAnkiConnectMessage {
   params: any;
 }
 
+// Vocabulary Sources Messages
+export interface GetVocabSourcesMessage {
+  type: "GET_VOCAB_SOURCES";
+}
+
+export interface SaveVocabSourcesMessage {
+  type: "SAVE_VOCAB_SOURCES";
+  sources: VocabSource[];
+}
+
+export interface ValidateVocabSourceMessage {
+  type: "VALIDATE_VOCAB_SOURCE";
+  source: Omit<VocabSource, "id" | "createdAt">;
+}
+
 export interface TokensResponse {
   unknown: string[];
 }
@@ -113,6 +128,24 @@ export interface RawAnkiConnectResponse {
   error?: string;
 }
 
+// Vocabulary Sources Responses
+export interface GetVocabSourcesResponse {
+  sources: VocabSource[];
+  migrated: boolean;
+}
+
+export interface SaveVocabSourcesResponse {
+  success: boolean;
+  error?: string;
+}
+
+export interface ValidateVocabSourceResponse {
+  isValid: boolean;
+  error?: string;
+  deckExists?: boolean;
+  fieldExists?: boolean;
+}
+
 export type Message =
   | TokensMessage
   | RefreshMessage
@@ -126,7 +159,12 @@ export type Message =
   | GetIgnoredWordsMessage
   | SetupIgnoredWordsMessage
   | CheckAnkiConnectMessage
-  | RawAnkiConnectMessage;
+  | RawAnkiConnectMessage
+  | GetVocabSourcesMessage
+  | SaveVocabSourcesMessage
+  | ValidateVocabSourceMessage
+  | GetVocabStatsMessage
+  | GetIgnoredWordsCountMessage;
 export type Response =
   | TokensResponse
   | RefreshResponse
@@ -138,7 +176,12 @@ export type Response =
   | GetIgnoredWordsResponse
   | SetupIgnoredWordsResponse
   | CheckAnkiConnectResponse
-  | RawAnkiConnectResponse;
+  | RawAnkiConnectResponse
+  | GetVocabSourcesResponse
+  | SaveVocabSourcesResponse
+  | ValidateVocabSourceResponse
+  | GetVocabStatsResponse
+  | GetIgnoredWordsCountResponse;
 
 // New highlight style interfaces
 export type HighlightStyle = "underline" | "background" | "outline" | "dots";
@@ -180,4 +223,58 @@ export interface IgnoredWordsSettings {
   noteType: string;
   fieldName: string;
   enabled: boolean;
+}
+
+// Vocabulary Sources System
+export interface VocabSource {
+  id: string;
+  name: string;
+  deckName: string;
+  fieldName: string;
+  enabled: boolean;
+  createdAt: string; // ISO date string
+  lastValidated?: string; // ISO date string
+  isValid?: boolean; // cached validation result
+}
+
+export interface VocabSettings {
+  sources: VocabSource[];
+  migrated?: boolean;
+}
+
+// Source validation result
+export interface SourceValidationResult {
+  isValid: boolean;
+  error?: string;
+  deckExists?: boolean;
+  fieldExists?: boolean;
+}
+
+// Vocabulary Statistics
+export interface VocabSourceStats {
+  sourceId: string;
+  sourceName: string;
+  wordCount: number;
+  percentage: number;
+}
+
+export interface VocabStatsData {
+  totalWords: number;
+  sourceStats: VocabSourceStats[];
+}
+
+export interface GetVocabStatsMessage {
+  type: "GET_VOCAB_STATS";
+}
+
+export interface GetVocabStatsResponse {
+  stats: VocabStatsData;
+}
+
+export interface GetIgnoredWordsCountMessage {
+  type: "GET_IGNORED_WORDS_COUNT";
+}
+
+export interface GetIgnoredWordsCountResponse {
+  count: number;
 }
