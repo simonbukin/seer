@@ -65,6 +65,10 @@ async function build() {
         src: "src/assets/icons/icon-128.png",
         dest: "dist/assets/icons/icon-128.png",
       },
+      {
+        src: "src/assets/icons/anki-icon.svg",
+        dest: "dist/assets/icons/anki-icon.svg",
+      },
     ];
 
     for (const file of staticFiles) {

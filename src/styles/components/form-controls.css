@@ -347,3 +347,98 @@ input[type="radio"] {
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
   background-color: var(--color-bg-primary);
 }
+
+/* Anki Status Indicator */
+.anki-status-container {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.anki-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.anki-status-indicator {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: help;
+  transition: all var(--transition-fast);
+  border: 2px solid transparent;
+}
+
+.anki-status-indicator.checking {
+  background-color: var(--color-warning);
+  border-color: var(--color-warning-border);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.anki-status-indicator.connected {
+  background-color: var(--color-success);
+  border-color: var(--color-success-border);
+}
+
+.anki-status-indicator.disconnected {
+  background-color: var(--color-error);
+  border-color: var(--color-error-border);
+}
+
+.anki-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.anki-status-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Tooltip styles */
+.anki-status-indicator[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--color-gray-800);
+  color: white;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  z-index: var(--z-tooltip);
+  margin-bottom: var(--space-1);
+  box-shadow: var(--shadow-lg);
+}
+
+.anki-status-indicator[title]:hover::before {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: var(--color-gray-800);
+  z-index: var(--z-tooltip);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}

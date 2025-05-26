@@ -33,12 +33,25 @@
           </div>
         </div>
 
-        <button id="testConnection" class="btn btn-primary">
-          Test AnkiConnect
-        </button>
-        <button id="saveDeckSettings" class="btn btn-secondary">
-          Save Settings
-        </button>
+        <div class="anki-bar">
+          <button id="saveDeckSettings" class="btn btn-secondary">
+            Save Settings
+          </button>
+          <div class="anki-status-container">
+            <div
+              id="ankiStatus"
+              class="anki-status-indicator"
+              title="Checking AnkiConnect..."
+            >
+              <img
+                class="anki-icon"
+                src="assets/icons/anki-icon.svg"
+                alt="Anki"
+              />
+            </div>
+            <span class="anki-status-label">AnkiConnect</span>
+          </div>
+        </div>
 
         <div id="deckStatus" class="status"></div>
       </div>

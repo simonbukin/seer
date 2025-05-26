@@ -188,26 +188,31 @@ async function loadFields(deckName: string): Promise<void> {
   }
 }
 
-// Test AnkiConnect connection
-async function testConnection(): Promise<void> {
-  try {
-    const result = await ankiConnect({
-      action: "version",
-      version: 6,
-    });
+// Update AnkiConnect status indicator
+async function updateAnkiStatus(): Promise<void> {
+  const statusIndicator = document.getElementById("ankiStatus");
+  if (!statusIndicator) return;
 
-    showStatus(
-      "deckStatus",
-      `AnkiConnect connected successfully (version ${result.result})`,
-      "success"
-    );
+  // Set checking state
+  statusIndicator.className = "anki-status-indicator checking";
+  statusIndicator.title = "Checking AnkiConnect...";
+
+  try {
+    const isConnected = await checkAnkiConnect();
+
+    if (isConnected) {
+      statusIndicator.className = "anki-status-indicator connected";
+      statusIndicator.title = "AnkiConnect is connected";
+    } else {
+      statusIndicator.className = "anki-status-indicator disconnected";
+      statusIndicator.title =
+        "Make sure Anki is open and AnkiConnect is installed";
+    }
   } catch (error) {
-    console.error("AnkiConnect test failed:", error);
-    showStatus(
-      "deckStatus",
-      "Failed to connect to AnkiConnect. Make sure Anki is running with the AnkiConnect add-on installed.",
-      "error"
-    );
+    console.error("Failed to check AnkiConnect status:", error);
+    statusIndicator.className = "anki-status-indicator disconnected";
+    statusIndicator.title =
+      "Make sure Anki is open and AnkiConnect is installed";
   }
 }
 
@@ -300,6 +305,9 @@ async function initializeOptions(): Promise<void> {
 
     // Load frequency stats
     await loadFrequencyStats();
+
+    // Initial AnkiConnect status check
+    await updateAnkiStatus();
   } catch (error) {
     console.error("Failed to initialize options:", error);
   }
@@ -398,9 +406,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadFields(deckName);
   });
 
-  document
-    .getElementById("testConnection")
-    ?.addEventListener("click", testConnection);
+  // Initial AnkiConnect status check
+  updateAnkiStatus();
+
+  // Set up periodic status checking (every 5 seconds)
+  setInterval(updateAnkiStatus, 5000);
   document.getElementById("loadDecks")?.addEventListener("click", loadDecks);
 
   // Display settings events
