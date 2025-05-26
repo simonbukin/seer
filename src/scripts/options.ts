@@ -237,11 +237,19 @@ async function initializeOptions(): Promise<void> {
   try {
     const settings = await loadSettings();
 
-    // Set deck configuration
+    // Load decks first, then set the saved values
+    await loadDecks();
+
+    // Set deck configuration after decks are loaded
     (document.getElementById("primaryDeck") as HTMLSelectElement).value =
       settings.primaryDeck;
-    (document.getElementById("wordField") as HTMLSelectElement).value =
-      settings.wordField;
+
+    // Load fields for the saved deck if it exists
+    if (settings.primaryDeck) {
+      await loadFields(settings.primaryDeck);
+      (document.getElementById("wordField") as HTMLSelectElement).value =
+        settings.wordField;
+    }
 
     // Set display settings
     (
@@ -582,7 +590,4 @@ document.addEventListener("DOMContentLoaded", async () => {
         );
       }
     });
-
-  // Load decks on page load
-  await loadDecks();
 });

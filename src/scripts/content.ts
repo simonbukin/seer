@@ -353,126 +353,35 @@ function toggleI1SentenceMode(enabled: boolean): void {
 // Dynamic CSS for gradient highlighting
 const style = document.createElement("style");
 
-function updateCSS(): void {
-  style.textContent = `
-  ${generateFrequencyCSS(settings.colorIntensity)}
-  
-  @keyframes fadeIn {
-    to { opacity: 1; }
-  }
+function injectCSS(): void {
+  // Inject the main CSS file
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = chrome.runtime.getURL("styles/main.css");
+  document.head.appendChild(link);
+}
 
-  .seer-stats-toggle {
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    width: 40px;
-    height: 40px;
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 18px;
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  }
+function updateCSSVariables(): void {
+  // Update CSS custom properties based on current settings
+  const root = document.documentElement;
 
-  .seer-stats-toggle:hover {
-    background: rgba(0, 0, 0, 0.9);
-    transform: scale(1.1);
-  }
+  // Update highlight intensity
+  root.style.setProperty(
+    "--highlight-intensity",
+    settings.colorIntensity.toString()
+  );
 
-  .seer-stats {
-    position: fixed;
-    top: 60px;
-    left: 10px;
-    background: rgba(0, 0, 0, 0.9);
-    color: white;
-    padding: 15px;
-    border-radius: 8px;
-    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 11px;
-    line-height: 1.4;
-    z-index: 9999;
-    min-width: 220px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    transition: all 0.3s ease;
-    opacity: 0;
-    transform: translateY(-10px);
-    pointer-events: none;
-  }
-  
-  .seer-stats.visible {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
-  }
-  
-  .seer-stats .title {
-    font-weight: bold;
-    margin-bottom: 10px;
-    color: #ffeb3b;
-    border-bottom: 1px solid #333;
-    padding-bottom: 5px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  
-  .seer-stats .close-btn {
-    background: none;
-    border: none;
-    color: #ccc;
-    cursor: pointer;
-    font-size: 16px;
-    padding: 0;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 3px;
-    transition: all 0.2s ease;
-  }
-
-  .seer-stats .close-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-  }
-
-  @keyframes rainbow-shift {
-    0% { background-position: 0% 100%; }
-    100% { background-position: 200% 100%; }
-  }
-  
-  .seer-stats .stat-row {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 3px;
-  }
-  
-  .seer-stats .stat-label {
-    color: #ccc;
-  }
-  
-  .seer-stats .stat-value {
-    color: #4caf50;
-    font-weight: bold;
-  }
-  
-  .seer-stats .unknown-value {
-    color: #ff5722;
-  }
-`;
+  // Update single color settings
+  root.style.setProperty("--single-highlight-color", settings.singleColor);
+  root.style.setProperty(
+    "--single-highlight-bg-color",
+    `${settings.singleColor}4D`
+  ); // 30% opacity
 }
 
 // Initialize CSS
-updateCSS();
-document.head.appendChild(style);
+injectCSS();
+updateCSSVariables();
 
 // Initialize new stats system
 function initializeStatsSystem(): void {
@@ -1456,7 +1365,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 
         // Update CSS if color intensity changed
         if (oldSettings.colorIntensity !== settings.colorIntensity) {
-          updateCSS();
+          updateCSSVariables();
         }
 
         // Re-apply highlighting if color-related settings changed and highlights are enabled

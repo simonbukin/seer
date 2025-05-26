@@ -31,6 +31,15 @@ async function build() {
     // Build TypeScript files
     await esbuild.build(buildConfig);
 
+    // Build CSS files
+    await esbuild.build({
+      entryPoints: ["src/styles/main.css"],
+      bundle: true,
+      outfile: "dist/styles/main.css",
+      minify: false,
+      sourcemap: false,
+    });
+
     // Copy static files from src/
     const staticFiles = [
       { src: "src/manifest.json", dest: "dist/manifest.json" },
@@ -67,12 +76,15 @@ async function build() {
       }
     }
 
-    // Ensure icons directory exists in dist
+    // Ensure directories exist in dist
     if (!fs.existsSync("dist/assets")) {
       fs.mkdirSync("dist/assets");
     }
     if (!fs.existsSync("dist/assets/icons")) {
       fs.mkdirSync("dist/assets/icons");
+    }
+    if (!fs.existsSync("dist/styles")) {
+      fs.mkdirSync("dist/styles");
     }
 
     // Copy icon files

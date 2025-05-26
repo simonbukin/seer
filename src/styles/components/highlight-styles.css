@@ -1,0 +1,270 @@
+/* Word Highlighting Styles */
+
+/* Base highlight class */
+.seer-word-unknown {
+  cursor: pointer !important;
+  transition: filter var(--transition-fast) !important;
+  position: relative !important;
+}
+
+.seer-word-unknown:hover {
+  filter: brightness(1.1) !important;
+}
+
+/* Highlight Style Variants */
+/* These use CSS custom properties that can be updated dynamically */
+
+/* Underline Style */
+.seer-highlight-underline {
+  text-decoration-line: underline !important;
+  text-decoration-color: var(
+    --highlight-color,
+    var(--color-freq-common)
+  ) !important;
+  text-decoration-thickness: 2px !important;
+  text-decoration-style: solid !important;
+}
+
+/* Background Style */
+.seer-highlight-background {
+  background-color: var(
+    --highlight-bg-color,
+    rgba(59, 130, 246, 0.2)
+  ) !important;
+  color: var(--highlight-color, var(--color-freq-common)) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 1px 2px !important;
+}
+
+/* Outline Style */
+.seer-highlight-outline {
+  text-shadow: -1px -1px 0 var(--highlight-color, var(--color-freq-common)),
+    1px -1px 0 var(--highlight-color, var(--color-freq-common)),
+    -1px 1px 0 var(--highlight-color, var(--color-freq-common)),
+    1px 1px 0 var(--highlight-color, var(--color-freq-common)) !important;
+}
+
+/* Dots Style */
+.seer-highlight-dots {
+  text-decoration-line: underline !important;
+  text-decoration-style: dotted !important;
+  text-decoration-color: var(
+    --highlight-color,
+    var(--color-freq-common)
+  ) !important;
+  text-decoration-thickness: 2px !important;
+}
+
+/* Frequency-based color classes */
+.seer-freq-very-common {
+  --highlight-color: var(--color-freq-very-common);
+  --highlight-bg-color: rgba(
+    16,
+    185,
+    129,
+    calc(var(--highlight-intensity) * 0.2)
+  );
+}
+
+.seer-freq-common {
+  --highlight-color: var(--color-freq-common);
+  --highlight-bg-color: rgba(
+    59,
+    130,
+    246,
+    calc(var(--highlight-intensity) * 0.2)
+  );
+}
+
+.seer-freq-uncommon {
+  --highlight-color: var(--color-freq-uncommon);
+  --highlight-bg-color: rgba(
+    139,
+    92,
+    246,
+    calc(var(--highlight-intensity) * 0.2)
+  );
+}
+
+.seer-freq-rare {
+  --highlight-color: var(--color-freq-rare);
+  --highlight-bg-color: rgba(
+    245,
+    158,
+    11,
+    calc(var(--highlight-intensity) * 0.2)
+  );
+}
+
+.seer-freq-very-rare {
+  --highlight-color: var(--color-freq-very-rare);
+  --highlight-bg-color: rgba(
+    239,
+    68,
+    68,
+    calc(var(--highlight-intensity) * 0.2)
+  );
+}
+
+.seer-freq-unknown {
+  --highlight-color: var(--color-gray-500);
+  --highlight-bg-color: rgba(
+    107,
+    114,
+    128,
+    calc(var(--highlight-intensity) * 0.15)
+  );
+}
+
+/* Single color mode */
+.seer-single-color {
+  --highlight-color: var(--single-highlight-color, #ff6b6b);
+  --highlight-bg-color: var(
+    --single-highlight-bg-color,
+    rgba(255, 107, 107, 0.3)
+  );
+}
+
+/* i+1 Sentence Mode - Rainbow Animation */
+.seer-i1-word {
+  text-decoration: none !important;
+  border-bottom: 3px solid transparent !important;
+  background-image: linear-gradient(
+    90deg,
+    #ff0000,
+    #ff8000,
+    #ffff00,
+    #80ff00,
+    #00ff00,
+    #00ff80,
+    #00ffff,
+    #0080ff,
+    #0000ff,
+    #8000ff,
+    #ff00ff,
+    #ff0080
+  ) !important;
+  background-size: 200% 3px !important;
+  background-repeat: no-repeat !important;
+  background-position: 0 100% !important;
+  animation: rainbow-shift 3s linear infinite !important;
+}
+
+@keyframes rainbow-shift {
+  0% {
+    background-position: 0% 100%;
+  }
+  100% {
+    background-position: 200% 100%;
+  }
+}
+
+/* Frequency hover badge */
+.seer-word-unknown[data-frequency]::before {
+  content: var(--frequency-content) !important;
+  position: absolute !important;
+  top: -16px !important;
+  right: -8px !important;
+  background: rgba(0, 0, 0, 0.9) !important;
+  color: white !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  padding: 3px 6px !important;
+  border-radius: var(--radius-xl) !important;
+  min-width: 18px !important;
+  text-align: center !important;
+  opacity: 0 !important;
+  transform: translateY(-4px) scale(0.9) !important;
+  transition: all var(--transition-fast) !important;
+  pointer-events: none !important;
+  z-index: var(--z-tooltip) !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.seer-word-unknown[data-frequency]:hover::before {
+  opacity: 1 !important;
+  transform: translateY(0) scale(1) !important;
+}
+
+/* Fade in animation for new highlights */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.seer-word-unknown.seer-fade-in {
+  animation: fadeIn var(--duration-normal) ease-out !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .seer-word-unknown[data-frequency]::before {
+    font-size: 9px !important;
+    padding: 2px 4px !important;
+    top: -14px !important;
+    right: -6px !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .seer-word-unknown {
+    --highlight-intensity: 1;
+  }
+
+  .seer-highlight-background {
+    border: 1px solid var(--highlight-color) !important;
+  }
+
+  .seer-highlight-underline {
+    text-decoration-thickness: 3px !important;
+  }
+
+  .seer-highlight-dots {
+    text-decoration-thickness: 3px !important;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .seer-word-unknown {
+    transition: none !important;
+  }
+
+  .seer-i1-word {
+    animation: none !important;
+    background-image: linear-gradient(
+      90deg,
+      var(--color-primary),
+      var(--color-primary)
+    ) !important;
+  }
+
+  .seer-word-unknown[data-frequency]::before {
+    transition: opacity var(--duration-fast) !important;
+  }
+
+  .seer-word-unknown.seer-fade-in {
+    animation: none !important;
+  }
+}
+
+/* Print styles */
+@media print {
+  .seer-word-unknown {
+    background: none !important;
+    color: inherit !important;
+    text-decoration: underline !important;
+    text-decoration-color: #000 !important;
+  }
+
+  .seer-word-unknown::before {
+    display: none !important;
+  }
+}
