@@ -3,13 +3,17 @@
 Seer is a Chrome extension that highlights webpages with unknown words and helps you identify good targets for
 mining in Anki.
 
-# Caveats
+## Demo
 
-This extension is scoped as a vocabulary tracker and a page highlighter. It is _just_ meant to let you easily evaluate the difficulty of content and identify words to mine more easily. Dictionary lookups should be done with a tool like [Yomitan](https://yomitan.wiki/). If you're mining video content, feel free to use [ASBPlayer](https://github.com/killergerbah/asbplayer)
+[![Seer Demo](https://img.youtube.com/vi/ZzF3ENlepPA/maxresdefault.jpg)](https://www.youtube.com/watch?v=ZzF3ENlepPA)
 
-# ⚠️ DISCLAIMER ⚠️ ️
+# ⚠️🚧️🚨️ DISCLAIMER ⚠️🚧️🚨️
 
 ️This extension is still under _heavy_ development and may not work as expected. No functionality or claims of stability are made. This is mostly for personal use at the moment, but I figured I'd share it with the community.
+
+# Caveats
+
+This extension is scoped as a vocabulary tracker and a page highlighter. It is _just_ meant to let you easily evaluate the difficulty of content and identify words to mine more easily. Dictionary lookups should be done with a tool like [Yomitan](https://yomitan.wiki/). If you're mining video content, feel free to use [ASBPlayer](https://github.com/killergerbah/asbplayer).
 
 ## Table of Contents
 
@@ -19,10 +23,6 @@ This extension is scoped as a vocabulary tracker and a page highlighter. It is _
 - [Features](#features)
 - [Troubleshooting](#troubleshooting)
 - [Related Tools](#related-tools)
-
-## Demo
-
-[![Seer Demo](https://img.youtube.com/vi/ZzF3ENlepPA/maxresdefault.jpg)](https://www.youtube.com/watch?v=ZzF3ENlepPA)
 
 ## Installation
 
