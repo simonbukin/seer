@@ -52,6 +52,15 @@ function updateI1SentenceToggleUI(enabled: boolean): void {
   }
 }
 
+function updatePreserveTextColorToggleUI(enabled: boolean): void {
+  const toggle = document.getElementById("preserveTextColorToggle")!;
+  if (enabled) {
+    toggle.classList.add("active");
+  } else {
+    toggle.classList.remove("active");
+  }
+}
+
 async function getCurrentHighlightState(): Promise<boolean> {
   return new Promise((resolve) => {
     const message: GetHighlightStateMessage = { type: "GET_HIGHLIGHT_STATE" };
@@ -91,6 +100,52 @@ async function getCurrentI1SentenceMode(): Promise<boolean> {
         resolve(response?.enabled ?? false);
       }
     );
+  });
+}
+
+async function getCurrentPreserveTextColorState(): Promise<boolean> {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get({ preserveTextColor: false }, (result) => {
+      if (chrome.runtime.lastError) {
+        console.error(
+          "Error getting preserve text color state:",
+          chrome.runtime.lastError
+        );
+        resolve(false); // Default to disabled
+        return;
+      }
+      resolve(result.preserveTextColor);
+    });
+  });
+}
+
+async function setPreserveTextColorState(enabled: boolean): Promise<boolean> {
+  return new Promise((resolve) => {
+    chrome.storage.sync.set({ preserveTextColor: enabled }, () => {
+      if (chrome.runtime.lastError) {
+        console.error(
+          "Error setting preserve text color state:",
+          chrome.runtime.lastError
+        );
+        showStatus("Failed to update preserve text color setting", "error");
+        resolve(false);
+        return;
+      }
+
+      const statusMessage = enabled
+        ? "Preserve text color enabled"
+        : "Preserve text color disabled";
+      showStatus(statusMessage, "success");
+
+      // Send message to content scripts to reload settings
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]?.id) {
+          chrome.tabs.sendMessage(tabs[0].id, { type: "RELOAD_SETTINGS" });
+        }
+      });
+
+      resolve(true);
+    });
   });
 }
 
@@ -191,8 +246,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Initialize UI with current state
   const currentState = await getCurrentHighlightState();
   const currentI1State = await getCurrentI1SentenceMode();
+  const currentPreserveTextColorState =
+    await getCurrentPreserveTextColorState();
   updateToggleUI(currentState);
   updateI1SentenceToggleUI(currentI1State);
+  updatePreserveTextColorToggleUI(currentPreserveTextColorState);
 
   // Toggle highlights handler
   const highlightToggle = document.getElementById("highlightToggle")!;
@@ -227,6 +285,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Revert UI if failed
     if (!success) {
       updateI1SentenceToggleUI(currentEnabled);
+    }
+  });
+
+  // Toggle preserve text color handler
+  const preserveTextColorToggle = document.getElementById(
+    "preserveTextColorToggle"
+  )!;
+  preserveTextColorToggle.addEventListener("click", async () => {
+    const currentEnabled = preserveTextColorToggle.classList.contains("active");
+    const newEnabled = !currentEnabled;
+
+    // Optimistically update UI
+    updatePreserveTextColorToggleUI(newEnabled);
+
+    // Send toggle message
+    const success = await setPreserveTextColorState(newEnabled);
+
+    // Revert UI if failed
+    if (!success) {
+      updatePreserveTextColorToggleUI(currentEnabled);
     }
   });
 

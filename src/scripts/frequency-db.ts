@@ -19,6 +19,7 @@ interface Settings {
   useFrequencyColors: boolean;
   singleColor: string;
   showFrequencyOnHover: boolean;
+  preserveTextColor: boolean;
 }
 
 // Color calculation functions
@@ -127,7 +128,8 @@ export function applyHighlightStyle(
   style: HighlightStyle,
   useFrequencyColors: boolean = true,
   frequency: number | null = null,
-  showFrequencyOnHover: boolean = false
+  showFrequencyOnHover: boolean = false,
+  preserveTextColor: boolean = false
 ): void {
   // Reset all styles first
   resetElementStyles(element);
@@ -156,7 +158,10 @@ export function applyHighlightStyle(
 
     case "background":
       element.style.backgroundColor = finalColors.bgColor;
-      element.style.color = finalColors.color;
+      // Only change text color if preserveTextColor is false
+      if (!preserveTextColor) {
+        element.style.color = finalColors.color;
+      }
       break;
 
     case "outline":
@@ -438,6 +443,7 @@ export async function loadSettings(): Promise<Settings> {
       useFrequencyColors: true,
       singleColor: "#ff6b6b",
       showFrequencyOnHover: false,
+      preserveTextColor: false,
     };
 
     chrome.storage.sync.get(defaultSettings, (result) => {

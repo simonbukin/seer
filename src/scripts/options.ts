@@ -27,6 +27,7 @@ interface Settings {
   useFrequencyColors: boolean;
   singleColor: string;
   showFrequencyOnHover: boolean;
+  preserveTextColor: boolean;
   vocabularyGoal: number;
   debugMode: boolean;
 }
@@ -39,6 +40,7 @@ const defaultSettings: Settings = {
   useFrequencyColors: true,
   singleColor: "#ff6b6b",
   showFrequencyOnHover: false,
+  preserveTextColor: false,
   vocabularyGoal: 10000,
   debugMode: false,
 };
@@ -572,6 +574,9 @@ async function initializeOptions(): Promise<void> {
   const showFrequencyOnHover = document.getElementById(
     "showFrequencyOnHover"
   ) as HTMLInputElement;
+  const preserveTextColor = document.getElementById(
+    "preserveTextColor"
+  ) as HTMLInputElement;
   const singleColor = document.getElementById(
     "singleColor"
   ) as HTMLInputElement;
@@ -587,6 +592,7 @@ async function initializeOptions(): Promise<void> {
   if (showStats) showStats.checked = settings.showStats;
   if (showFrequencyOnHover)
     showFrequencyOnHover.checked = settings.showFrequencyOnHover;
+  if (preserveTextColor) preserveTextColor.checked = settings.preserveTextColor;
   if (singleColor) singleColor.value = settings.singleColor;
   if (vocabularyGoal) vocabularyGoal.value = settings.vocabularyGoal.toString();
   if (debugMode) debugMode.checked = settings.debugMode;
@@ -681,6 +687,9 @@ function updateStylePreview(): void {
   const colorIntensity = document.getElementById(
     "colorIntensity"
   ) as HTMLInputElement;
+  const preserveTextColor = document.getElementById(
+    "preserveTextColor"
+  ) as HTMLInputElement;
   const singleColor = document.getElementById(
     "singleColor"
   ) as HTMLInputElement;
@@ -690,19 +699,52 @@ function updateStylePreview(): void {
   const style = highlightStyleRadio.value as HighlightStyle;
   const useFrequencyColors = colorSchemeRadio.value === "frequency";
   const intensity = parseFloat(colorIntensity.value);
+  const preserveColors = preserveTextColor?.checked || false;
 
   // Apply preview styles
   if (useFrequencyColors) {
     const color1 = getColorForFrequency(5000, intensity); // Common word
     const color2 = getColorForFrequency(50000, intensity); // Rare word
     if (color1)
-      applyHighlightStyle(previewWord1, color1, style, true, 5000, false);
+      applyHighlightStyle(
+        previewWord1,
+        color1,
+        style,
+        true,
+        5000,
+        false,
+        preserveColors
+      );
     if (color2)
-      applyHighlightStyle(previewWord2, color2, style, true, 50000, false);
+      applyHighlightStyle(
+        previewWord2,
+        color2,
+        style,
+        true,
+        50000,
+        false,
+        preserveColors
+      );
   } else {
     const color = getSingleColor(singleColor?.value || "#ff6b6b", intensity);
-    applyHighlightStyle(previewWord1, color, style, false, null, false);
-    applyHighlightStyle(previewWord2, color, style, false, null, false);
+    applyHighlightStyle(
+      previewWord1,
+      color,
+      style,
+      false,
+      null,
+      false,
+      preserveColors
+    );
+    applyHighlightStyle(
+      previewWord2,
+      color,
+      style,
+      false,
+      null,
+      false,
+      preserveColors
+    );
   }
 }
 
@@ -1059,6 +1101,11 @@ document.addEventListener("DOMContentLoaded", () => {
     singleColor.addEventListener("change", updateStylePreview);
   }
 
+  const preserveTextColorEl = document.getElementById("preserveTextColor");
+  if (preserveTextColorEl) {
+    preserveTextColorEl.addEventListener("change", updateStylePreview);
+  }
+
   if (saveDisplaySettingsBtn) {
     saveDisplaySettingsBtn.addEventListener("click", async () => {
       try {
@@ -1073,6 +1120,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const showFrequencyOnHoverEl = document.getElementById(
           "showFrequencyOnHover"
         ) as HTMLInputElement;
+        const preserveTextColorEl = document.getElementById(
+          "preserveTextColor"
+        ) as HTMLInputElement;
         const singleColorEl = document.getElementById(
           "singleColor"
         ) as HTMLInputElement;
@@ -1082,6 +1132,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (showStatsEl) settings.showStats = showStatsEl.checked;
         if (showFrequencyOnHoverEl)
           settings.showFrequencyOnHover = showFrequencyOnHoverEl.checked;
+        if (preserveTextColorEl)
+          settings.preserveTextColor = preserveTextColorEl.checked;
         if (singleColorEl) settings.singleColor = singleColorEl.value;
 
         const highlightStyleRadio = document.querySelector(

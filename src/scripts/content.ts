@@ -40,6 +40,7 @@ let settings = {
   useFrequencyColors: true,
   singleColor: "#ff6b6b",
   showFrequencyOnHover: false,
+  preserveTextColor: false,
 };
 
 // Highlight state
@@ -624,6 +625,15 @@ async function highlightWordInSentence(
           // Create rainbow-highlighted span for the target word
           const span = document.createElement("span");
           span.className = CLS;
+
+          // Check for vertical text mode and add class if needed
+          if (
+            textNode.parentElement &&
+            isVerticalTextCached(textNode.parentElement)
+          ) {
+            span.classList.add("seer-vertical-text");
+          }
+
           span.textContent = segment.segment;
 
           // Apply rainbow styling for i+1 words
@@ -914,6 +924,15 @@ async function wrapI1Sentences(
             // Wrap unknown word in span with rainbow styling
             const span = document.createElement("span");
             span.className = CLS;
+
+            // Check for vertical text mode and add class if needed
+            if (
+              textNode.parentElement &&
+              isVerticalTextCached(textNode.parentElement)
+            ) {
+              span.classList.add("seer-vertical-text");
+            }
+
             span.textContent = segment.segment;
 
             // Apply rainbow styling for i+1 words
@@ -1006,6 +1025,15 @@ async function wrapUnknown(
         // Wrap unknown word in span with frequency-based styling
         const span = document.createElement("span");
         span.className = CLS;
+
+        // Check for vertical text mode and add class if needed
+        if (
+          textNode.parentElement &&
+          isVerticalTextCached(textNode.parentElement)
+        ) {
+          span.classList.add("seer-vertical-text");
+        }
+
         span.textContent = segment.segment;
 
         // Apply frequency-based coloring
@@ -1182,7 +1210,8 @@ async function applyFrequencyColoring(
       settings.highlightStyle,
       settings.useFrequencyColors,
       frequency,
-      settings.showFrequencyOnHover
+      settings.showFrequencyOnHover,
+      settings.preserveTextColor
     );
   } catch (error) {
     console.warn(`❌ Error applying frequency coloring for "${word}":`, error);
@@ -1229,6 +1258,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       `🔤 Received toggle i+1 sentence mode message: ${toggleMsg.enabled}`
     );
     toggleI1SentenceMode(toggleMsg.enabled);
+  }
+
+  if (message.type === "RELOAD_SETTINGS") {
+    console.log("⚙️ Received reload settings message");
+    loadSettings()
+      .then(async (newSettings) => {
+        const oldSettings = { ...settings };
+        settings = newSettings;
+        console.log("✅ Settings reloaded from popup:", settings);
+
+        // Re-apply highlighting if preserve text color setting changed
+        if (
+          highlightsEnabled &&
+          oldSettings.preserveTextColor !== settings.preserveTextColor
+        ) {
+          console.log(
+            "🎨 Preserve text color setting changed, re-applying highlighting..."
+          );
+          await reapplyHighlighting();
+        }
+      })
+      .catch((error) => {
+        console.warn("❌ Failed to reload settings from popup:", error);
+      });
   }
 });
 
@@ -1375,7 +1428,9 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
             oldSettings.highlightStyle !== settings.highlightStyle ||
             oldSettings.useFrequencyColors !== settings.useFrequencyColors ||
             oldSettings.singleColor !== settings.singleColor ||
-            oldSettings.showFrequencyOnHover !== settings.showFrequencyOnHover)
+            oldSettings.showFrequencyOnHover !==
+              settings.showFrequencyOnHover ||
+            oldSettings.preserveTextColor !== settings.preserveTextColor)
         ) {
           console.log("🎨 Color settings changed, re-applying highlighting...");
           await reapplyHighlighting();
@@ -1449,3 +1504,30 @@ document.addEventListener("keydown", (event) => {
     }
   }
 });
+
+// Utility function to detect vertical text mode
+function isVerticalText(element: Element): boolean {
+  let current: Element | null = element;
+  while (current && current !== document.body) {
+    const style = getComputedStyle(current);
+    const writingMode = style.writingMode;
+    if (writingMode === "vertical-rl" || writingMode === "vertical-lr") {
+      return true;
+    }
+    current = current.parentElement;
+  }
+  return false;
+}
+
+// Cache for vertical text detection to avoid repeated computations
+const verticalTextCache = new WeakMap<Element, boolean>();
+
+function isVerticalTextCached(element: Element): boolean {
+  if (verticalTextCache.has(element)) {
+    return verticalTextCache.get(element)!;
+  }
+
+  const isVertical = isVerticalText(element);
+  verticalTextCache.set(element, isVertical);
+  return isVertical;
+}

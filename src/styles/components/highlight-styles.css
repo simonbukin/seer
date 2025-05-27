@@ -268,3 +268,89 @@
     display: none !important;
   }
 }
+
+/* Vertical Text Mode Support */
+/* Detect vertical text via CSS writing-mode or JavaScript-added class */
+[style*="writing-mode: vertical"] .seer-word-unknown[data-frequency]::before,
+.seer-vertical-text[data-frequency]::before {
+  /* Adjust positioning for vertical text */
+  top: -8px !important;
+  left: -16px !important;
+  right: auto !important;
+  transform: translateX(-4px) scale(0.9) !important;
+}
+
+[style*="writing-mode: vertical"]
+  .seer-word-unknown[data-frequency]:hover::before,
+.seer-vertical-text[data-frequency]:hover::before {
+  transform: translateX(0) scale(1) !important;
+}
+
+/* Vertical text rainbow animation - change gradient direction */
+[style*="writing-mode: vertical"] .seer-i1-word,
+.seer-vertical-text.seer-i1-word {
+  background-image: linear-gradient(
+    180deg,
+    #ff0000,
+    #ff8000,
+    #ffff00,
+    #80ff00,
+    #00ff00,
+    #00ff80,
+    #00ffff,
+    #0080ff,
+    #0000ff,
+    #8000ff,
+    #ff00ff,
+    #ff0080
+  ) !important;
+  background-size: 3px 200% !important;
+  background-position: 100% 0 !important;
+  border-bottom: none !important;
+  border-right: 3px solid transparent !important;
+}
+
+@keyframes rainbow-shift-vertical {
+  0% {
+    background-position: 100% 0%;
+  }
+  100% {
+    background-position: 100% 200%;
+  }
+}
+
+[style*="writing-mode: vertical"] .seer-i1-word,
+.seer-vertical-text.seer-i1-word {
+  animation: rainbow-shift-vertical 3s linear infinite !important;
+}
+
+/* Vertical text mode for writing-mode: vertical-lr (left-to-right) */
+[style*="writing-mode: vertical-lr"]
+  .seer-word-unknown[data-frequency]::before {
+  left: auto !important;
+  right: -16px !important;
+  transform: translateX(4px) scale(0.9) !important;
+}
+
+[style*="writing-mode: vertical-lr"]
+  .seer-word-unknown[data-frequency]:hover::before {
+  transform: translateX(0) scale(1) !important;
+}
+
+[style*="writing-mode: vertical-lr"] .seer-i1-word {
+  border-right: none !important;
+  border-left: 3px solid transparent !important;
+}
+
+/* Reduced motion support for vertical text */
+@media (prefers-reduced-motion: reduce) {
+  [style*="writing-mode: vertical"] .seer-i1-word,
+  .seer-vertical-text.seer-i1-word {
+    animation: none !important;
+    background-image: linear-gradient(
+      180deg,
+      var(--color-primary),
+      var(--color-primary)
+    ) !important;
+  }
+}
