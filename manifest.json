@@ -1,0 +1,91 @@
+{
+  "manifest_version": 3,
+  "name": "Seer - Japanese Reading Companion",
+  "version": "0.1.0",
+  "description": "Highlights unknown Japanese words based on your Anki vocabulary",
+
+  "permissions": [
+    "storage",
+    "alarms",
+    "sidePanel",
+    "tabs",
+    "webNavigation"
+  ],
+
+  "side_panel": {
+    "default_path": "src/sidepanel/sidepanel.html"
+  },
+
+  "host_permissions": [
+    "http://127.0.0.1:8765/*",
+    "http://localhost:8765/*"
+  ],
+
+  "background": {
+    "service_worker": "src/background/service-worker.ts",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "exclude_matches": ["https://localhost:5173/*", "*://seer.dev/*", "https://*.ts.net/*"],
+      "js": ["src/content/content.ts"],
+      "css": ["src/styles/highlights.css", "src/styles/word-actions.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://localhost:5173/*", "*://seer.dev/*", "https://*.ts.net/*"],
+      "js": ["src/content/seer-dev-bridge.ts"],
+      "run_at": "document_start"
+    }
+  ],
+
+  "options_page": "src/options/options.html",
+
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "MacCtrl+Shift+S"
+      },
+      "description": "Open Seer popup"
+    },
+    "toggle-highlighting": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+H",
+        "mac": "MacCtrl+Shift+H"
+      },
+      "description": "Toggle all highlighting on/off"
+    },
+    "open-sidepanel": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+P",
+        "mac": "MacCtrl+Shift+P"
+      },
+      "description": "Open side panel"
+    },
+    "cycle-highlight-mode": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+M",
+        "mac": "MacCtrl+Shift+M"
+      },
+      "description": "Cycle highlight mode (Frequency/Status/Knowledge)"
+    }
+  }
+}

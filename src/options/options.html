@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seer Settings</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    :root {
+      --pico-font-size: 15px;
+
+      /* Status message colors - WCAG AA compliant (4.5:1+ contrast) */
+      --seer-success-bg: #dcfce7;
+      --seer-success-text: #166534;
+      --seer-error-bg: #fee2e2;
+      --seer-error-text: #991b1b;
+      --seer-info-bg: #dbeafe;
+      --seer-info-text: #1e40af;
+    }
+
+    [data-theme="dark"] {
+      /* Status message colors - dark mode with proper contrast */
+      --seer-success-bg: #14532d;
+      --seer-success-text: #bbf7d0;
+      --seer-error-bg: #7f1d1d;
+      --seer-error-text: #fecaca;
+      --seer-info-bg: #1e3a8a;
+      --seer-info-text: #bfdbfe;
+    }
+
+    body > main {
+      padding: 2rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 { margin-bottom: 0.5rem; }
+    .subtitle { color: var(--pico-muted-color); margin-bottom: 2rem; }
+    article { margin-bottom: 1.5rem; }
+    article h3 { margin-bottom: 1rem; }
+    .source-item {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 0.5rem;
+      align-items: end;
+      margin-bottom: 0.75rem;
+      padding: 0.75rem;
+      background: var(--pico-card-background-color);
+      border-radius: var(--pico-border-radius);
+    }
+    .source-item select { margin-bottom: 0; }
+    .source-item button { margin-bottom: 0; padding: 0.5rem 0.75rem; }
+    #add-source-btn { margin-top: 0.5rem; }
+    .status {
+      padding: 0.75rem;
+      border-radius: var(--pico-border-radius);
+      margin-top: 0.5rem;
+    }
+    .status.success { background: var(--seer-success-bg); color: var(--seer-success-text); }
+    .status.error { background: var(--seer-error-bg); color: var(--seer-error-text); }
+    .status.info { background: var(--seer-info-bg); color: var(--seer-info-text); }
+    .button-row { display: flex; gap: 0.5rem; margin-top: 1rem; }
+    .button-row button { flex: 1; }
+    .hidden { display: none !important; }
+
+    /* Top-level tabs (sticky) */
+    .top-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 2px solid var(--pico-muted-border-color);
+      position: sticky;
+      top: 0;
+      background: var(--pico-background-color);
+      z-index: 100;
+      padding: 0.75rem 0;
+      margin: -0.5rem -2rem 1.5rem -2rem;
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+    .top-tabs a.tab {
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      color: var(--pico-muted-color);
+      text-decoration: none;
+    }
+    .top-tabs a.tab:hover {
+      color: var(--pico-color);
+    }
+    .top-tabs a.tab.active {
+      color: var(--pico-primary);
+      border-bottom-color: var(--pico-primary);
+      font-weight: 600;
+    }
+    .top-tab-content { display: none; }
+    .top-tab-content.active { display: block; }
+
+    /* Layer configuration */
+    .layer-category { margin-bottom: 1rem; }
+    .layer-category-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--pico-muted-border-color);
+      cursor: pointer;
+      user-select: none;
+    }
+    .layer-category-header:hover { background: var(--pico-card-background-color); }
+    .layer-category-header h4 { margin: 0; font-size: 0.9rem; }
+    .layer-category-header .collapse-indicator {
+      display: inline-block;
+      margin-right: 0.5rem;
+      transition: transform 0.2s ease;
+    }
+    .layer-category-header.collapsed .collapse-indicator { transform: rotate(-90deg); }
+    .layer-category-items { padding: 0.5rem 0; }
+    .layer-category-items.collapsed { display: none; }
+    .layer-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto auto auto;
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0.5rem;
+      border-radius: var(--pico-border-radius);
+      margin-bottom: 0.25rem;
+    }
+    .layer-row:hover { background: var(--pico-card-background-color); }
+    .layer-toggle-switch { width: 20px; }
+    .layer-label { font-size: 0.85rem; flex: 1; }
+    .layer-color-container {
+      position: relative;
+    }
+    .layer-color-swatch, .layer-text-color-swatch {
+      width: 36px;
+      height: 28px;
+      padding: 0;
+      border: 2px solid var(--pico-muted-border-color);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .layer-color-swatch:hover, .layer-text-color-swatch:hover {
+      border-color: var(--pico-primary);
+    }
+    .layer-color-picker-popover, .layer-text-color-picker-popover {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      z-index: 100;
+      background: var(--pico-card-background-color);
+      border: 1px solid var(--pico-muted-border-color);
+      border-radius: var(--pico-border-radius);
+      padding: 0.5rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      display: none;
+      margin-top: 4px;
+    }
+    .layer-color-picker-popover.open, .layer-text-color-picker-popover.open {
+      display: block;
+    }
+    .clear-text-color-btn {
+      width: 100%;
+      margin-top: 0.5rem;
+      padding: 0.3rem 0.5rem;
+      font-size: 0.75rem;
+    }
+    rgba-color-picker {
+      width: 200px;
+      height: 160px;
+    }
+    .autosave-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      background: color-mix(in srgb, var(--pico-primary) 15%, transparent);
+      color: var(--pico-primary);
+      border-radius: var(--pico-border-radius);
+      font-size: 0.8rem;
+      margin-bottom: 1rem;
+    }
+    .autosave-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--pico-primary);
+      border-radius: 50%;
+      animation: autosave-pulse 2s infinite;
+    }
+    @keyframes autosave-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .layer-style-select, .layer-underline-select {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.8rem;
+      min-width: 100px;
+    }
+
+    /* Dashboard link box */
+    .dashboard-link-box {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.1));
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: var(--pico-border-radius);
+      padding: 1.5rem;
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .dashboard-link-box h3 {
+      margin: 0 0 0.5rem 0;
+    }
+    .dashboard-link-box p {
+      margin: 0 0 1rem 0;
+      color: var(--pico-muted-color);
+      font-size: 0.9rem;
+    }
+    .dashboard-link-box a {
+      display: inline-block;
+      padding: 0.75rem 1.5rem;
+      background: var(--pico-primary);
+      color: white;
+      text-decoration: none;
+      border-radius: var(--pico-border-radius);
+      font-weight: 600;
+    }
+    .dashboard-link-box a:hover {
+      background: var(--pico-primary-hover);
+    }
+
+    /* Debug section */
+    .debug-output {
+      font-family: monospace;
+      font-size: 0.75rem;
+      white-space: pre-wrap;
+      background: var(--pico-card-background-color);
+      padding: 1rem;
+      border-radius: var(--pico-border-radius);
+      max-height: 300px;
+      overflow: auto;
+    }
+    .no-data {
+      text-align: center;
+      padding: 2rem;
+      color: var(--pico-muted-color);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Seer Settings</h1>
+    <p class="subtitle">Configure your Japanese reading companion</p>
+
+    <!-- Top-level tabs -->
+    <div class="tabs top-tabs">
+      <a class="tab active" data-top-tab="anki">Anki</a>
+      <a class="tab" data-top-tab="appearance">Appearance</a>
+      <a class="tab" data-top-tab="prompts">Story Prompts</a>
+      <a class="tab" data-top-tab="advanced">Advanced</a>
+    </div>
+
+    <!-- Tab: Anki -->
+    <div id="top-tab-anki" class="top-tab-content active">
+      <article>
+        <h3>AnkiConnect</h3>
+        <label for="anki-url">AnkiConnect URL</label>
+        <input type="text" id="anki-url" value="http://127.0.0.1:8765" placeholder="http://127.0.0.1:8765">
+
+        <label for="anki-api-key">API Key (optional)</label>
+        <input type="password" id="anki-api-key" placeholder="Leave empty if not required">
+
+        <div class="button-row">
+          <button id="test-connection" class="secondary">Test Connection</button>
+          <button id="load-decks" class="secondary">Load Decks from Anki</button>
+        </div>
+        <div id="connection-status" class="status hidden"></div>
+      </article>
+
+      <article>
+        <h3>Known Word Sources</h3>
+        <p><small>Select decks and fields containing words you already know</small></p>
+        <div id="known-sources"></div>
+        <button id="add-source-btn" class="secondary outline">+ Add Deck</button>
+      </article>
+
+      <article>
+        <h3>Ignored Words Deck</h3>
+        <p><small>Words you ignore (Shift+I) will be added to this deck</small></p>
+        <div class="source-item" style="grid-template-columns: 1fr 1fr;">
+          <div>
+            <label for="ignored-deck">Deck</label>
+            <select id="ignored-deck"></select>
+          </div>
+          <div>
+            <label for="ignored-field">Field</label>
+            <select id="ignored-field"></select>
+          </div>
+        </div>
+      </article>
+
+      <article>
+        <h3>Known Words Deck</h3>
+        <p><small>Words you mark as known (Shift+K) will be added to this deck and count as known</small></p>
+        <div class="source-item" style="grid-template-columns: 1fr 1fr;">
+          <div>
+            <label for="known-deck">Deck</label>
+            <select id="known-deck"></select>
+          </div>
+          <div>
+            <label for="known-field">Field</label>
+            <select id="known-field"></select>
+          </div>
+        </div>
+      </article>
+
+      <button id="save-btn">Save Anki Settings</button>
+      <div id="save-status" class="status hidden"></div>
+      <p style="font-size: 0.75rem; color: var(--pico-muted-color); margin-top: 0.5rem;">
+        Anki connection and vocabulary settings require explicit save. Highlight settings save automatically.
+      </p>
+    </div>
+
+    <!-- Tab: Appearance -->
+    <div id="top-tab-appearance" class="top-tab-content">
+      <article>
+        <h3>Theme</h3>
+        <div style="margin-bottom: 1.5rem;">
+          <label for="theme-select" style="display: block; margin-bottom: 0.5rem;">Color Theme</label>
+          <select id="theme-select" style="max-width: 200px;">
+            <option value="auto">Auto (System)</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+          <p style="font-size: 0.75rem; color: var(--pico-muted-color); margin-top: 0.25rem;">
+            Auto will follow your system's light/dark mode preference
+          </p>
+        </div>
+      </article>
+
+      <article>
+        <h3>Highlight Layers</h3>
+        <p><small>Configure how different word types are highlighted. Enable layers and customize their appearance.</small></p>
+
+        <div class="autosave-indicator">
+          <span class="autosave-dot"></span>
+          Changes save automatically
+        </div>
+
+        <label>
+          <input type="checkbox" id="enabled" checked>
+          Enable Seer
+        </label>
+
+        <div id="highlight-layers">
+          <div class="no-data">Loading layer configuration...</div>
+        </div>
+      </article>
+    </div>
+
+    <!-- Tab: Story Prompts -->
+    <div id="top-tab-prompts" class="top-tab-content">
+      <article>
+        <h3>DoJG Story Prompt Generator</h3>
+        <p><small>Generate Claude prompts that combine your weak vocabulary with grammar patterns from the Dictionary of Japanese Grammar.</small></p>
+
+        <!-- Vocabulary Settings -->
+        <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--pico-card-background-color); border-radius: var(--pico-border-radius);">
+          <h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem;">Vocabulary Selection</h4>
+
+          <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="include-recently-wrong" checked style="margin: 0; width: 1rem; height: 1rem;">
+            <span style="font-size: 0.85rem;">Include words I failed in Anki</span>
+          </label>
+
+          <div style="margin-left: 1.5rem; margin-bottom: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <label for="recently-wrong-days" style="font-size: 0.8rem; margin: 0; white-space: nowrap;">Time window:</label>
+              <select id="recently-wrong-days" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; width: auto;">
+                <option value="1" selected>Today</option>
+                <option value="2">Last 2 days</option>
+                <option value="3">Last 3 days</option>
+                <option value="7">Last 7 days</option>
+              </select>
+            </div>
+            <p style="margin: 0.25rem 0 0 0; font-size: 0.75rem; color: var(--pico-muted-color);">
+              Highest priority - cards you answered "Again" in Anki reviews
+            </p>
+          </div>
+
+          <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="include-lapsed" checked style="margin: 0; width: 1rem; height: 1rem;">
+            <span style="font-size: 0.85rem;">Include lapsed Anki words (words you keep forgetting)</span>
+          </label>
+
+          <div style="margin-left: 1.5rem; margin-bottom: 0.75rem;">
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <label for="min-lapses" style="font-size: 0.8rem; margin: 0; white-space: nowrap;">Min lapses:</label>
+                <select id="min-lapses" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; width: auto;">
+                  <option value="1">1+</option>
+                  <option value="2" selected>2+</option>
+                  <option value="3">3+</option>
+                  <option value="5">5+</option>
+                </select>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <label for="lapsed-recency" style="font-size: 0.8rem; margin: 0; white-space: nowrap;">Interval ≤:</label>
+                <select id="lapsed-recency" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; width: auto;">
+                  <option value="7">7 days</option>
+                  <option value="30" selected>30 days</option>
+                  <option value="90">90 days</option>
+                  <option value="0">Any</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="include-unknown" style="margin: 0; width: 1rem; height: 1rem;">
+            <span style="font-size: 0.85rem;">Include frequently encountered unknown words</span>
+          </label>
+
+          <div style="margin-left: 1.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <label for="min-encounters" style="font-size: 0.8rem; margin: 0; white-space: nowrap;">Min encounters:</label>
+              <select id="min-encounters" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; width: auto;">
+                <option value="3">3+</option>
+                <option value="5" selected>5+</option>
+                <option value="10">10+</option>
+                <option value="20">20+</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grammar Settings -->
+        <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--pico-card-background-color); border-radius: var(--pico-border-radius);">
+          <h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem;">Grammar Selection</h4>
+
+          <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="auto-detect-grammar" checked style="margin: 0; width: 1rem; height: 1rem;">
+            <span style="font-size: 0.85rem;">Auto-detect grammar from my encountered sentences</span>
+          </label>
+
+          <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; cursor: pointer; margin-left: 1.5rem;">
+            <input type="checkbox" id="exclude-known-grammar" checked style="margin: 0; width: 1rem; height: 1rem;">
+            <span style="font-size: 0.85rem;">Exclude grammar I've marked as "known"</span>
+          </label>
+
+          <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="level-basic" checked style="margin: 0; width: 0.9rem; height: 0.9rem;"> Basic
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="level-intermediate" checked style="margin: 0; width: 0.9rem; height: 0.9rem;"> Intermediate
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="level-advanced" style="margin: 0; width: 0.9rem; height: 0.9rem;"> Advanced
+            </label>
+          </div>
+
+          <!-- Browsable Grammar List -->
+          <div style="border: 1px solid var(--pico-muted-border-color); border-radius: var(--pico-border-radius); padding: 0.5rem;">
+            <input type="text" id="grammar-filter" placeholder="Filter grammar points..." style="padding: 0.35rem 0.5rem; font-size: 0.8rem; margin-bottom: 0.5rem; width: 100%;">
+            <div id="grammar-stats" style="font-size: 0.75rem; color: var(--pico-muted-color); margin-bottom: 0.5rem;">
+              Loading grammar...
+            </div>
+
+            <!-- Basic section -->
+            <div class="grammar-level-section" data-level="basic">
+              <div class="grammar-level-header" style="display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0.5rem; background: var(--pico-background-color); cursor: pointer; border-radius: 4px; margin-bottom: 0.25rem;">
+                <span style="font-size: 0.8rem; font-weight: 600;">▼ Basic <span class="level-count">(0)</span></span>
+                <button class="mark-all-known-btn" style="padding: 0.15rem 0.4rem; font-size: 0.7rem; margin: 0;">Mark all known</button>
+              </div>
+              <div class="grammar-level-items" style="max-height: 200px; overflow-y: auto; padding-left: 0.5rem;">
+                <!-- Items populated by JS -->
+              </div>
+            </div>
+
+            <!-- Intermediate section -->
+            <div class="grammar-level-section" data-level="intermediate">
+              <div class="grammar-level-header" style="display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0.5rem; background: var(--pico-background-color); cursor: pointer; border-radius: 4px; margin-bottom: 0.25rem;">
+                <span style="font-size: 0.8rem; font-weight: 600;">▶ Intermediate <span class="level-count">(0)</span></span>
+                <button class="mark-all-known-btn" style="padding: 0.15rem 0.4rem; font-size: 0.7rem; margin: 0;">Mark all known</button>
+              </div>
+              <div class="grammar-level-items collapsed" style="max-height: 200px; overflow-y: auto; padding-left: 0.5rem; display: none;">
+                <!-- Items populated by JS -->
+              </div>
+            </div>
+
+            <!-- Advanced section -->
+            <div class="grammar-level-section" data-level="advanced">
+              <div class="grammar-level-header" style="display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0.5rem; background: var(--pico-background-color); cursor: pointer; border-radius: 4px; margin-bottom: 0.25rem;">
+                <span style="font-size: 0.8rem; font-weight: 600;">▶ Advanced <span class="level-count">(0)</span></span>
+                <button class="mark-all-known-btn" style="padding: 0.15rem 0.4rem; font-size: 0.7rem; margin: 0;">Mark all known</button>
+              </div>
+              <div class="grammar-level-items collapsed" style="max-height: 200px; overflow-y: auto; padding-left: 0.5rem; display: none;">
+                <!-- Items populated by JS -->
+              </div>
+            </div>
+          </div>
+
+          <div id="selected-grammar" style="margin-top: 0.5rem; font-size: 0.8rem;">
+            <!-- Selected grammar points will appear here as tags -->
+          </div>
+        </div>
+
+        <!-- Story Settings -->
+        <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--pico-card-background-color); border-radius: var(--pico-border-radius);">
+          <h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem;">Story Settings</h4>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">
+            <div>
+              <label for="word-count" style="font-size: 0.8rem; margin-bottom: 0.25rem; display: block;">Words to include:</label>
+              <select id="word-count" style="padding: 0.35rem 0.5rem; font-size: 0.8rem;">
+                <option value="5">5 words</option>
+                <option value="10" selected>10 words</option>
+                <option value="15">15 words</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="grammar-count" style="font-size: 0.8rem; margin-bottom: 0.25rem; display: block;">Grammar points:</label>
+              <select id="grammar-count" style="padding: 0.35rem 0.5rem; font-size: 0.8rem;">
+                <option value="0">None (vocab only)</option>
+                <option value="2">2 patterns</option>
+                <option value="3" selected>3 patterns</option>
+                <option value="5">5 patterns</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="story-style" style="font-size: 0.8rem; margin-bottom: 0.25rem; display: block;">Story style:</label>
+              <select id="story-style" style="padding: 0.35rem 0.5rem; font-size: 0.8rem;">
+                <option value="slice-of-life">Slice of Life</option>
+                <option value="adventure">Adventure</option>
+                <option value="mystery">Mystery</option>
+                <option value="casual-conversation">Casual Conversation</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="difficulty-hint" style="font-size: 0.8rem; margin-bottom: 0.25rem; display: block;">Difficulty:</label>
+              <select id="difficulty-hint" style="padding: 0.35rem 0.5rem; font-size: 0.8rem;">
+                <option value="easy">Easy</option>
+                <option value="natural" selected>Natural</option>
+                <option value="challenging">Challenging</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Template Selection -->
+        <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--pico-card-background-color); border-radius: var(--pico-border-radius);">
+          <h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem;">Prompt Template</h4>
+
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <select id="template-select" style="flex: 1; min-width: 200px; padding: 0.35rem 0.5rem; font-size: 0.85rem;">
+              <!-- Populated by JS -->
+            </select>
+            <button id="edit-template-btn" class="secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; margin: 0;">Edit</button>
+            <button id="new-template-btn" class="secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; margin: 0;">New</button>
+            <button id="delete-template-btn" class="secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; margin: 0; color: var(--pico-del-color);">Delete</button>
+          </div>
+        </div>
+
+        <!-- Generate Button -->
+        <button id="generate-prompt-btn" class="primary" style="width: 100%; margin-bottom: 1rem;">Generate Story Prompt</button>
+
+        <!-- Template Editor Modal -->
+        <dialog id="template-editor-modal" style="max-width: 800px; width: 90%;">
+          <article style="margin: 0;">
+            <header>
+              <h3 style="margin: 0;" id="template-modal-title">Edit Template</h3>
+            </header>
+
+            <div style="margin-bottom: 1rem;">
+              <label for="template-name" style="font-size: 0.85rem;">Template Name:</label>
+              <input type="text" id="template-name" placeholder="My Template" style="margin-bottom: 0.5rem;">
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+              <label for="template-content" style="font-size: 0.85rem;">Template Content:</label>
+              <textarea id="template-content" style="width: 100%; height: 300px; font-family: monospace; font-size: 0.8rem; resize: vertical;"></textarea>
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+              <p style="font-size: 0.75rem; color: var(--pico-muted-color); margin-bottom: 0.5rem;">Available variables (click to insert):</p>
+              <div id="template-variables" style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+                <button type="button" class="template-var-btn" data-var="{recently_wrong}" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin: 0;">{recently_wrong}</button>
+                <button type="button" class="template-var-btn" data-var="{lapsed}" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin: 0;">{lapsed}</button>
+                <button type="button" class="template-var-btn" data-var="{unknown}" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin: 0;">{unknown}</button>
+                <button type="button" class="template-var-btn" data-var="{all_vocab}" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin: 0;">{all_vocab}</button>
+                <button type="button" class="template-var-btn" data-var="{grammar}" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin: 0;">{grammar}</button>
+                <button type="button" class="template-var-btn" data-var="{grammar_list}" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin: 0;">{grammar_list}</button>
+                <button type="button" class="template-var-btn" data-var="{style}" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin: 0;">{style}</button>
+                <button type="button" class="template-var-btn" data-var="{difficulty}" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin: 0;">{difficulty}</button>
+                <button type="button" class="template-var-btn" data-var="{word_count}" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin: 0;">{word_count}</button>
+                <button type="button" class="template-var-btn" data-var="{grammar_count}" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin: 0;">{grammar_count}</button>
+                <button type="button" class="template-var-btn" data-var="{length}" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; margin: 0;">{length}</button>
+              </div>
+            </div>
+
+            <footer style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+              <button type="button" id="cancel-template-btn" class="secondary">Cancel</button>
+              <button type="button" id="save-template-btn" class="primary">Save Template</button>
+            </footer>
+          </article>
+        </dialog>
+
+        <!-- Output -->
+        <div id="prompt-output" class="hidden">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h4 style="margin: 0; font-size: 0.9rem;">Generated Prompt</h4>
+            <span id="prompt-stats" style="font-size: 0.75rem; color: var(--pico-muted-color);"></span>
+          </div>
+          <textarea id="prompt-text" readonly style="width: 100%; height: 300px; font-family: monospace; font-size: 0.8rem; resize: vertical;"></textarea>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+            <button id="copy-prompt-btn" class="secondary">Copy to Clipboard</button>
+          </div>
+          <div id="copy-status" class="status hidden" style="margin-top: 0.5rem;"></div>
+        </div>
+      </article>
+    </div>
+
+    <!-- Tab: Advanced -->
+    <div id="top-tab-advanced" class="top-tab-content">
+      <!-- Dashboard Link -->
+      <div class="dashboard-link-box">
+        <h3>Seer Dashboard</h3>
+        <p>View vocabulary statistics, encounters, i+1 mining, and more in an external page where Yomitan works.</p>
+        <a href="https://localhost:5173" target="_blank" id="dashboard-link">Open Dashboard</a>
+      </div>
+
+      <!-- Encounter Tracking Settings -->
+      <article>
+        <h3>Encounter Tracking</h3>
+        <p><small>Configure how word encounters are tracked and deduplicated.</small></p>
+
+        <div style="margin-bottom: 0.75rem;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; margin: 0; font-size: 0.85rem; cursor: pointer;">
+            <input type="checkbox" id="dedup-enabled" checked style="margin: 0; width: 1rem; height: 1rem;">
+            Enable deduplication
+          </label>
+          <p style="margin: 0.25rem 0 0 1.5rem; font-size: 0.75rem; color: var(--pico-muted-color);">
+            Prevents recording duplicate encounters when you refresh a page or revisit within the time window.
+          </p>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: 1.5rem;">
+          <label for="dedup-window" style="margin: 0; font-size: 0.8rem; white-space: nowrap;">Time window:</label>
+          <select id="dedup-window" style="margin: 0; padding: 0.35rem 0.5rem; font-size: 0.8rem; width: auto;">
+            <option value="1">1 hour</option>
+            <option value="4">4 hours</option>
+            <option value="12">12 hours</option>
+            <option value="24">24 hours</option>
+            <option value="168">1 week</option>
+          </select>
+          <span style="font-size: 0.75rem; color: var(--pico-muted-color);">Same word on same page within this window counts as one encounter</span>
+        </div>
+      </article>
+
+      <!-- Backup & Restore Section -->
+      <article>
+        <h3>Backup & Restore</h3>
+        <p><small>Export your data to transfer to another computer or keep a backup.</small></p>
+
+        <!-- Export Section -->
+        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--pico-card-background-color); border-radius: var(--pico-border-radius);">
+          <h4 style="margin: 0 0 0.5rem 0; font-size: 0.85rem;">Export Data</h4>
+          <div id="backup-stats" style="margin-bottom: 0.75rem; font-size: 0.75rem; color: var(--pico-muted-color);">
+            Loading data statistics...
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <label style="display: flex; align-items: center; gap: 0.25rem; margin: 0; font-size: 0.8rem; cursor: pointer;">
+              <input type="checkbox" id="export-compress" checked style="margin: 0; width: 1rem; height: 1rem;">
+              Compress
+            </label>
+            <button id="export-btn" class="primary" style="margin-left: auto; padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+              Export Backup
+            </button>
+          </div>
+          <div id="export-status" class="status hidden" style="margin-top: 0.5rem;"></div>
+        </div>
+
+        <!-- Import Section -->
+        <div style="padding: 0.75rem; background: var(--pico-card-background-color); border-radius: var(--pico-border-radius);">
+          <h4 style="margin: 0 0 0.5rem 0; font-size: 0.85rem;">Restore from Backup</h4>
+          <input type="file" id="import-file" accept=".seer,.json,.gz" style="margin-bottom: 0.75rem; font-size: 0.8rem;">
+
+          <div id="import-preview" class="hidden" style="margin-bottom: 0.75rem; padding: 0.5rem; background: var(--pico-background-color); border-radius: var(--pico-border-radius); font-size: 0.75rem;">
+            <!-- Preview populated after file selection -->
+          </div>
+
+          <div style="margin-bottom: 0.75rem;">
+            <label style="font-size: 0.7rem; color: var(--pico-muted-color); display: block; margin-bottom: 0.25rem;">Conflict Resolution</label>
+            <select id="import-conflict-strategy" style="font-size: 0.8rem; padding: 0.35rem 0.5rem;">
+              <option value="replace">Replace existing data</option>
+              <option value="merge">Merge with existing data</option>
+              <option value="skip">Skip duplicates</option>
+            </select>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <label style="display: flex; align-items: center; gap: 0.25rem; margin: 0; font-size: 0.8rem; cursor: pointer;">
+              <input type="checkbox" id="import-clear-existing" style="margin: 0; width: 1rem; height: 1rem;">
+              Clear existing first
+            </label>
+            <button id="import-btn" class="primary" style="margin-left: auto; padding: 0.4rem 0.8rem; font-size: 0.8rem;" disabled>
+              Import Backup
+            </button>
+          </div>
+          <div id="import-status" class="status hidden" style="margin-top: 0.5rem;"></div>
+        </div>
+      </article>
+
+      <!-- Debug Section -->
+      <article>
+        <h3>Debug</h3>
+        <div id="debug-output" class="debug-output">
+          <div class="no-data">Click "Load Debug Data" to inspect raw database</div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+          <button id="load-debug-btn" class="secondary outline">Load Debug Data</button>
+          <button id="clear-db-btn" class="secondary" style="background: #dc2626; border-color: #dc2626; color: white;">Clear Database</button>
+        </div>
+        <div id="clear-db-status" class="status hidden" style="margin-top: 0.5rem;"></div>
+      </article>
+    </div>
+  </main>
+
+  <script type="module" src="options.ts"></script>
+</body>
+</html>

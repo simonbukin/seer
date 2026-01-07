@@ -1,3 +1,41 @@
+FEATURES.md
+
+# Large data files (download with scripts/download-data.sh)
+scripts/jmdict-*.json
+scripts/jmdict-*.tgz
+
+# Dependencies
 node_modules/
+
+# Build output
 dist/
-package-lock.json
+
+# Environment variables
+.env
+.env.local
+
+# Editor directories and files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Cache
+.cache/
+.vite/
+
+# Temporary files
+*.tmp
+*.temp
+.claude/

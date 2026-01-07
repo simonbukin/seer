@@ -1,0 +1,10 @@
+services:
+  seer-dashboard:
+    image: nginx:alpine
+    container_name: seer-dashboard
+    volumes:
+      - ./dashboard:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8080:80"
+    restart: unless-stopped

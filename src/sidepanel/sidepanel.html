@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seer - Page Analysis</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link rel="stylesheet" href="sidepanel.css">
+  <link rel="stylesheet" href="../shared/components/seer-components.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Seer</h1>
+      <p class="subtitle" id="page-url">Loading...</p>
+    </header>
+
+    <!-- Comprehension Stats -->
+    <section class="stats-section">
+      <div class="stat-row">
+        <div class="stat-main">
+          <span class="stat-value" id="comprehension-percent">--</span>
+          <span class="stat-label">Comprehension</span>
+        </div>
+        <div class="stat-secondary">
+          <span id="known-count">--</span> / <span id="total-count">--</span> words
+        </div>
+      </div>
+    </section>
+
+    <!-- Virtual Page Analysis -->
+    <section class="virtual-stats-section" id="virtual-stats-section">
+      <div class="virtual-header">
+        <h2>Full Page Analysis</h2>
+        <span class="virtual-badge">Virtual</span>
+      </div>
+      <div id="virtual-content" class="virtual-content">
+        <p class="virtual-description">Scan entire page content without recording encounters.</p>
+        <button id="scan-full-page-btn" class="secondary outline">
+          Scan Full Page
+        </button>
+      </div>
+      <div id="virtual-progress" class="virtual-progress" style="display: none;">
+        <progress id="virtual-progress-bar" value="0" max="100"></progress>
+        <span id="virtual-progress-text">Scanning...</span>
+      </div>
+      <div id="virtual-results" class="virtual-results" style="display: none;">
+        <div class="stat-row">
+          <div class="stat-main">
+            <span class="stat-value virtual" id="virtual-comprehension-percent">--</span>
+            <span class="stat-label">Full Page Comprehension</span>
+          </div>
+          <div class="stat-secondary">
+            <span id="virtual-known-count">--</span> / <span id="virtual-total-count">--</span> words
+          </div>
+        </div>
+
+        <!-- Detailed Statistics (collapsible) -->
+        <details class="detailed-stats" id="virtual-detailed-stats">
+          <summary>Detailed Statistics</summary>
+          <div class="stats-grid">
+            <!-- Characters -->
+            <div class="stat-group single">
+              <span class="stat-group-label">Characters</span>
+              <span class="stat-group-value" id="virtual-char-count">--</span>
+            </div>
+
+            <!-- Words: Total | Unique | 1x -->
+            <div class="stat-group">
+              <span class="stat-group-label">Words</span>
+              <div class="stat-group-values fullwidth">
+                <div class="stat-pill-labeled" id="virtual-word-count-wrap">
+                  <span class="pill-value" id="virtual-word-count">--</span>
+                  <span class="pill-label">total</span>
+                </div>
+                <div class="stat-pill-labeled" id="virtual-unique-words-wrap">
+                  <span class="pill-value" id="virtual-unique-words">--</span>
+                  <span class="pill-label">unique</span>
+                </div>
+                <div class="stat-pill-labeled" id="virtual-hapax-wrap">
+                  <span class="pill-value" id="virtual-hapax">--</span>
+                  <span class="pill-label">1x only</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Kanji: Total | Unique | 1x -->
+            <div class="stat-group">
+              <span class="stat-group-label">Kanji</span>
+              <div class="stat-group-values fullwidth">
+                <div class="stat-pill-labeled" id="virtual-total-kanji-wrap">
+                  <span class="pill-value" id="virtual-total-kanji">--</span>
+                  <span class="pill-label">total</span>
+                </div>
+                <div class="stat-pill-labeled" id="virtual-unique-kanji-wrap">
+                  <span class="pill-value" id="virtual-unique-kanji">--</span>
+                  <span class="pill-label">unique</span>
+                </div>
+                <div class="stat-pill-labeled" id="virtual-kanji-hapax-wrap">
+                  <span class="pill-value" id="virtual-kanji-hapax">--</span>
+                  <span class="pill-label">1x only</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Difficulty with mini chart -->
+            <div class="stat-group difficulty">
+              <div class="difficulty-header">
+                <span class="stat-group-label">Difficulty</span>
+                <span class="stat-badge" id="virtual-difficulty-label">--</span>
+              </div>
+              <div class="difficulty-chart-row">
+                <canvas id="difficulty-sparkline" width="160" height="40"></canvas>
+              </div>
+              <div class="difficulty-stats">
+                <span class="diff-stat"><span class="diff-label">min</span><span class="diff-value" id="virtual-min-difficulty">--</span></span>
+                <span class="diff-stat"><span class="diff-label">med</span><span class="diff-value" id="virtual-median-difficulty">--</span></span>
+                <span class="diff-stat"><span class="diff-label">avg</span><span class="diff-value" id="virtual-avg-difficulty">--</span></span>
+                <span class="diff-stat"><span class="diff-label">peak</span><span class="diff-value" id="virtual-peak-difficulty">--</span></span>
+              </div>
+            </div>
+
+            <!-- Sentences -->
+            <div class="stat-group">
+              <span class="stat-group-label">Sentences</span>
+              <div class="stat-group-values fullwidth">
+                <div class="stat-pill-labeled">
+                  <span class="pill-value" id="virtual-sentence-count">--</span>
+                  <span class="pill-label">total</span>
+                </div>
+                <div class="stat-pill-labeled" id="virtual-i1-wrap">
+                  <span class="pill-value" id="virtual-i1-count">--</span>
+                  <span class="pill-label">i+1</span>
+                </div>
+                <div class="stat-pill-labeled">
+                  <span class="pill-value" id="virtual-avg-sentence-len">--</span>
+                  <span class="pill-label">avg len</span>
+                </div>
+                <div class="stat-pill-labeled">
+                  <span class="pill-value" id="virtual-max-sentence-len">--</span>
+                  <span class="pill-label">max len</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <div class="virtual-charts">
+          <div class="chart-container mini">
+            <canvas id="virtual-frequency-chart"></canvas>
+          </div>
+        </div>
+        <div id="virtual-unknown-words" class="word-list mini"></div>
+
+        <!-- i+1 Sentences from Virtual Scan (collapsible) -->
+        <details class="i1-sentences-section" id="virtual-i1-sentences-section">
+          <summary>i+1 Sentences <span class="i1-count-badge" id="virtual-i1-badge">0</span></summary>
+          <p class="i1-description">Click a sentence to scroll to it on the page</p>
+          <div id="virtual-i1-sentences" class="sentence-list compact"></div>
+        </details>
+
+        <button id="rescan-btn" class="secondary outline small">
+          Rescan
+        </button>
+      </div>
+    </section>
+
+    <!-- Frequency Distribution Chart -->
+    <section class="chart-section">
+      <h2>Frequency Distribution</h2>
+      <div class="chart-container">
+        <canvas id="frequency-chart"></canvas>
+      </div>
+    </section>
+
+    <!-- Knowledge Level Chart -->
+    <section class="chart-section">
+      <h2>Knowledge Levels</h2>
+      <div class="chart-container small">
+        <canvas id="knowledge-chart"></canvas>
+      </div>
+    </section>
+
+    <!-- Top Unknown Words -->
+    <section class="list-section">
+      <h2>Top Unknown Words</h2>
+      <div id="unknown-words-list" class="word-list">
+        <div class="loading">Loading...</div>
+      </div>
+    </section>
+
+    <!-- i+1 Sentences -->
+    <section class="list-section">
+      <h2>i+1 Sentences</h2>
+      <p class="section-subtitle">Sentences with exactly 1 unknown word</p>
+      <div id="i1-sentences-list" class="sentence-list">
+        <div class="loading">Loading...</div>
+      </div>
+    </section>
+
+    <!-- Actions -->
+    <section class="actions-section">
+      <button id="sync-btn" class="secondary outline">
+        <span class="btn-icon">🔄</span> Sync Vocabulary
+      </button>
+      <button id="options-btn" class="secondary outline">
+        <span class="btn-icon">⚙️</span> Options
+      </button>
+    </section>
+  </main>
+
+  <script type="module" src="sidepanel.ts"></script>
+</body>
+</html>

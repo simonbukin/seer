@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seer Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <!-- CSS handled by Vite bundler via TypeScript imports -->
+  <script>
+    // Apply theme immediately to prevent flash
+    (function() {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+    })();
+  </script>
+</head>
+<body>
+  <header class="container">
+    <nav>
+      <ul>
+        <li><strong>Seer Dashboard</strong></li>
+      </ul>
+      <ul>
+        <li id="extension-status" class="status-indicator">
+          <span class="status-dot"></span>
+          <span class="status-text">Connecting...</span>
+        </li>
+        <li><button id="sync-btn" class="secondary small">Sync</button></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- Extension not detected warning -->
+    <article id="no-extension" class="warning hidden">
+      <h3>Extension Not Detected</h3>
+      <p>The Seer extension is not connected. Make sure:</p>
+      <ul>
+        <li>The Seer extension is installed and enabled</li>
+        <li>You've reloaded the extension after building</li>
+        <li>You're accessing this page via HTTPS (https://localhost:5173)</li>
+      </ul>
+      <button id="retry-connection">Retry Connection</button>
+    </article>
+
+    <!-- Main content (hidden until extension connects) -->
+    <div id="main-content" class="hidden">
+      <!-- Tab Navigation -->
+      <nav class="tabs">
+        <button class="tab active" data-tab="vocabulary">Vocabulary</button>
+        <button class="tab" data-tab="encounters">Encounters</button>
+        <button class="tab" data-tab="sentences">Sentences</button>
+        <button class="tab" data-tab="i1-mining">i+1 Mining</button>
+        <button class="tab" data-tab="sites">Sites</button>
+        <button class="tab" data-tab="library">Library</button>
+      </nav>
+
+      <!-- Vocabulary Tab -->
+      <section id="tab-vocabulary" class="tab-content active">
+        <div class="section-header">
+          <h2>Vocabulary</h2>
+          <div class="filter-bar">
+            <input type="search" id="vocab-search" placeholder="Search words...">
+            <select id="vocab-status-filter">
+              <option value="all">All Status</option>
+              <option value="known">Known</option>
+              <option value="ignored">Ignored</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="stats-summary" id="vocab-summary">
+          <div class="stat-card">
+            <div class="stat-value" id="vocab-mature-count">--</div>
+            <div class="stat-label">Mature</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="vocab-young-count">--</div>
+            <div class="stat-label">Young</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="vocab-learning-count">--</div>
+            <div class="stat-label">Learning</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="vocab-new-count">--</div>
+            <div class="stat-label">New</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="vocab-ignored-count">--</div>
+            <div class="stat-label">Ignored</div>
+          </div>
+        </div>
+
+        <div class="seer-word-list" id="vocab-list">
+          <div class="seer-list-loading">Loading vocabulary...</div>
+        </div>
+      </section>
+
+      <!-- Encounters Tab -->
+      <section id="tab-encounters" class="tab-content">
+        <div class="section-header">
+          <h2>Encounters</h2>
+          <div class="filter-bar">
+            <select id="encounters-time-filter">
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="week">Last 7 Days</option>
+              <option value="month">Last 30 Days</option>
+            </select>
+            <select id="encounters-sort">
+              <option value="count">Most Seen</option>
+              <option value="recent">Most Recent</option>
+              <option value="frequency">Frequency Rank</option>
+              <option value="alpha">Alphabetical</option>
+            </select>
+            <select id="encounters-min">
+              <option value="1">1+ encounters</option>
+              <option value="2">2+ encounters</option>
+              <option value="3">3+ encounters</option>
+              <option value="5">5+ encounters</option>
+              <option value="10">10+ encounters</option>
+            </select>
+            <select id="encounters-status-filter">
+              <option value="all">All Status</option>
+              <option value="unknown">Unknown</option>
+              <option value="known">Known</option>
+              <option value="ignored">Ignored</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="stats-summary" id="encounters-summary">
+          <div class="stat-card">
+            <div class="stat-value" id="encounters-total">--</div>
+            <div class="stat-label">Total Words</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="encounters-unknown">--</div>
+            <div class="stat-label">Unknown</div>
+          </div>
+        </div>
+
+        <div class="split-view">
+          <div class="seer-word-list" id="encounters-list">
+            <div class="seer-list-loading">Loading encounters...</div>
+          </div>
+          <div class="detail-panel hidden" id="word-detail-panel">
+            <div class="detail-header">
+              <h3 id="detail-word">--</h3>
+              <button class="close-btn" id="close-detail">&times;</button>
+            </div>
+            <div class="detail-content" id="detail-content"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sentences Tab -->
+      <section id="tab-sentences" class="tab-content">
+        <div class="section-header">
+          <h2>Sentences</h2>
+          <div class="filter-bar">
+            <input type="search" id="sentences-search" placeholder="Search sentences...">
+            <select id="sentences-source-filter">
+              <option value="encountered">Encountered</option>
+              <option value="library">Library</option>
+              <option value="all">All Sources</option>
+            </select>
+            <select id="sentences-unknown-filter">
+              <option value="0">All Sentences</option>
+              <option value="1">i+1 only</option>
+              <option value="2">i+2 only</option>
+              <option value="3">i+3 only</option>
+            </select>
+            <select id="sentences-sort">
+              <option value="recent">Most Recent</option>
+              <option value="shortest">Shortest First</option>
+              <option value="longest">Longest First</option>
+            </select>
+            <select id="sentences-time-filter">
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="week">Last 7 Days</option>
+              <option value="month">Last 30 Days</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="stats-summary" id="sentences-summary">
+          <div class="stat-card">
+            <div class="stat-value" id="sentences-total">--</div>
+            <div class="stat-label">Total</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="sentences-showing">--</div>
+            <div class="stat-label">Showing</div>
+          </div>
+        </div>
+
+        <div class="seer-sentence-list" id="sentences-list">
+          <div class="seer-list-loading">Loading sentences...</div>
+        </div>
+        <button id="sentences-load-more" class="secondary small" style="width: 100%; margin-top: 0.5rem;">Load More</button>
+      </section>
+
+      <!-- i+1 Mining Tab -->
+      <section id="tab-i1-mining" class="tab-content">
+        <div class="section-header">
+          <h2>i+1 Mining</h2>
+          <div class="filter-bar">
+            <select id="i1-unknown-filter">
+              <option value="1">i+1 (1 unknown)</option>
+              <option value="2">i+2 (2 unknowns)</option>
+              <option value="3">i+3 (3 unknowns)</option>
+            </select>
+            <select id="i1-time-filter">
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="week">Last 7 Days</option>
+              <option value="month">Last 30 Days</option>
+            </select>
+            <button id="i1-refresh" class="secondary small">Refresh</button>
+          </div>
+        </div>
+
+        <div class="stats-summary" id="i1-summary">
+          <div class="stat-card">
+            <div class="stat-value" id="i1-total">--</div>
+            <div class="stat-label">i+1 Sentences</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="i1-unique-words">--</div>
+            <div class="stat-label">Unique Targets</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="i1-avg">--</div>
+            <div class="stat-label">Avg per Word</div>
+          </div>
+        </div>
+
+        <div class="two-column">
+          <div class="column">
+            <h3>High-Value Words</h3>
+            <p class="subtitle">Words that appear in the most i+1 sentences</p>
+            <div class="seer-word-list mini" id="i1-high-value-words">
+              <div class="seer-list-loading">Loading...</div>
+            </div>
+          </div>
+          <div class="column">
+            <h3>Perfect Learning Sentences</h3>
+            <p class="subtitle">Sentences with exactly 1 unknown word</p>
+            <div class="seer-sentence-list" id="i1-sentences">
+              <div class="seer-list-loading">Loading...</div>
+            </div>
+            <button id="i1-load-more" class="secondary small" style="width: 100%; margin-top: 0.5rem;">Load More</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sites Tab -->
+      <section id="tab-sites" class="tab-content">
+        <div class="section-header">
+          <h2>Sites</h2>
+          <div class="filter-bar">
+            <select id="sites-sort">
+              <option value="recent">Most Recent</option>
+              <option value="time">Most Time Spent</option>
+              <option value="comprehension">Comprehension</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="site-list" id="sites-list">
+          <div class="seer-list-loading">Loading sites...</div>
+        </div>
+      </section>
+
+      <!-- Library Tab -->
+      <section id="tab-library" class="tab-content">
+        <div class="section-header">
+          <h2>Content Library</h2>
+          <div class="filter-bar">
+            <input type="search" id="library-search" placeholder="Search sentences...">
+            <input type="file" id="library-import-files" multiple accept=".json" style="display: none;">
+            <button id="library-import-btn" class="primary small">Import JSON</button>
+            <button id="library-recalc-btn" class="secondary small">Recalculate All</button>
+            <button id="library-clear-btn" class="secondary small outline">Clear Library</button>
+          </div>
+        </div>
+
+        <div class="stats-summary" id="library-summary">
+          <div class="stat-card">
+            <div class="stat-value" id="library-sources">--</div>
+            <div class="stat-label">Sources</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="library-sentences">--</div>
+            <div class="stat-label">Sentences</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="library-avg-comp">--</div>
+            <div class="stat-label">Avg Comprehension</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="library-ready">--</div>
+            <div class="stat-label">Ready (90%+)</div>
+          </div>
+        </div>
+
+        <div id="library-import-status" class="hidden" style="padding: 1rem; background: var(--pico-card-background-color); border-radius: 0.5rem; margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span id="library-import-text">Importing...</span>
+            <span id="library-import-progress">0%</span>
+          </div>
+          <progress id="library-import-bar" max="100" value="0" style="width: 100%; margin-top: 0.5rem;"></progress>
+        </div>
+
+        <!-- Library i+1 Sentences -->
+        <div class="two-column">
+          <div class="column">
+            <h3>i+1 Sentences from Library</h3>
+            <p class="subtitle">Learn one new word per sentence</p>
+            <div class="seer-sentence-list" id="library-i1-sentences">
+              <div class="seer-list-loading">Loading...</div>
+            </div>
+            <button id="library-i1-load-more" class="secondary small" style="width: 100%; margin-top: 0.5rem;">Load More</button>
+          </div>
+          <div class="column">
+            <h3>Sources</h3>
+            <p class="subtitle">Content in your library</p>
+            <div class="library-list" id="library-list">
+              <div class="seer-list-loading">Loading library...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Search Results (hidden until search) -->
+        <div id="library-search-results" class="hidden">
+          <h3>Search Results</h3>
+          <div class="seer-sentence-list" id="library-search-list"></div>
+          <button id="library-search-load-more" class="secondary small hidden" style="width: 100%; margin-top: 0.5rem;">Load More</button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="container">
+    <small>
+      Seer Dashboard &bull;
+      <span id="version-info">Extension not connected</span>
+    </small>
+  </footer>
+
+  <script type="module" src="dashboard.ts"></script>
+</body>
+</html>

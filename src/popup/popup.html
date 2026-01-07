@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seer</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    :root {
+      --pico-font-size: 14px;
+      --seer-accent: #6366f1;
+      --seer-accent-hover: #4f46e5;
+      --seer-surface: #f8fafc;
+      --seer-muted: #64748b;
+      --seer-success: #22c55e;
+      --seer-warning: #f59e0b;
+    }
+    [data-theme="dark"] {
+      --seer-surface: #1e293b;
+      --seer-muted: #94a3b8;
+    }
+
+    html, body {
+      width: 300px;
+      min-height: auto;
+      margin: 0;
+      padding: 0;
+    }
+
+    body > main {
+      padding: 1rem;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .header h1 {
+      font-size: 1.25rem;
+      margin: 0;
+      font-weight: 700;
+      color: var(--pico-color);
+    }
+
+    /* Master toggle switch */
+    .header input[type="checkbox"] {
+      width: 40px;
+      height: 22px;
+      margin: 0;
+    }
+
+    /* Status indicator */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--seer-surface);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      font-size: 0.8rem;
+      color: var(--seer-muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--seer-success);
+    }
+
+    .status-dot.offline {
+      background: var(--seer-warning);
+    }
+
+    /* Action buttons */
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .actions button {
+      padding: 0.6rem 0.75rem;
+      font-size: 0.85rem;
+      margin: 0;
+      border-radius: 8px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+    }
+
+    .actions button.primary {
+      background: var(--seer-accent);
+      border-color: var(--seer-accent);
+      color: white;
+    }
+
+    .actions button.primary:hover {
+      background: var(--seer-accent-hover);
+      border-color: var(--seer-accent-hover);
+    }
+
+    .actions button svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Mode selector */
+    .section {
+      margin-bottom: 1rem;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+    }
+
+    .section-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--seer-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .mode-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.4rem;
+    }
+
+    .mode-btn {
+      padding: 0.5rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--pico-muted-border-color);
+      background: var(--pico-card-background-color);
+      color: var(--pico-color);
+      text-align: center;
+      transition: all 0.15s;
+    }
+
+    .mode-btn:hover {
+      border-color: var(--seer-accent);
+      background: color-mix(in srgb, var(--seer-accent) 8%, transparent);
+    }
+
+    .mode-btn.active {
+      background: var(--seer-accent);
+      border-color: var(--seer-accent);
+      color: white;
+    }
+
+    .mode-btn .label {
+      display: block;
+      font-weight: 600;
+    }
+
+    .mode-btn .desc {
+      display: block;
+      font-size: 0.65rem;
+      opacity: 0.7;
+      margin-top: 2px;
+    }
+
+    /* Toggles row */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 0;
+    }
+
+    .toggle-row label {
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .toggle-row input[type="checkbox"] {
+      width: 36px;
+      height: 20px;
+      margin: 0;
+    }
+
+    /* Ignored notice */
+    .ignored-notice {
+      background: color-mix(in srgb, var(--seer-warning) 15%, transparent);
+      border: 1px solid var(--seer-warning);
+      padding: 0.6rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+
+    .ignored-notice button {
+      margin-top: 0.4rem;
+      padding: 0.3rem 0.6rem;
+      font-size: 0.75rem;
+    }
+
+    /* Footer links */
+    .footer {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--pico-muted-border-color);
+    }
+
+    .footer a {
+      font-size: 0.75rem;
+      color: var(--seer-muted);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .footer a:hover {
+      color: var(--seer-accent);
+    }
+
+    .footer svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Collapsible section */
+    .collapsible-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      padding: 0.4rem 0;
+      font-size: 0.8rem;
+      color: var(--seer-muted);
+    }
+
+    .collapsible-header:hover {
+      color: var(--pico-color);
+    }
+
+    .collapsible-header svg {
+      width: 12px;
+      height: 12px;
+      transition: transform 0.2s;
+    }
+
+    .collapsible-header.open svg {
+      transform: rotate(90deg);
+    }
+
+    .collapsible-content {
+      display: none;
+      padding-left: 0.5rem;
+    }
+
+    .collapsible-content.open {
+      display: block;
+    }
+
+    /* Ignore buttons */
+    .ignore-btns {
+      display: flex;
+      gap: 0.4rem;
+      margin-top: 0.5rem;
+    }
+
+    .ignore-btns button {
+      flex: 1;
+      padding: 0.4rem;
+      font-size: 0.7rem;
+      margin: 0;
+      background: transparent;
+      border: 1px solid var(--pico-muted-border-color);
+      color: var(--seer-muted);
+    }
+
+    .ignore-btns button:hover {
+      border-color: var(--seer-warning);
+      color: var(--seer-warning);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <!-- Header with master toggle -->
+    <div class="header">
+      <div class="header-left">
+        <h1>Seer</h1>
+      </div>
+      <input type="checkbox" id="master-toggle" role="switch" checked>
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="sync-status">Last sync: checking...</span>
+    </div>
+
+    <!-- Ignored notice (hidden by default) -->
+    <div id="ignored-notice" class="ignored-notice" style="display: none;">
+      <div>This <span id="ignore-reason">page</span> is ignored</div>
+      <button id="unignore-btn" class="outline">Stop Ignoring</button>
+    </div>
+
+    <!-- Primary actions -->
+    <div class="actions">
+      <button id="sidepanel-btn" class="primary">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6Zm0 9.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6Zm0 9.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+        </svg>
+        <span>Side Panel</span>
+      </button>
+      <button id="options-btn" class="secondary outline">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+        </svg>
+        <span>Settings</span>
+      </button>
+    </div>
+
+    <!-- Highlight mode -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Highlight Mode</span>
+      </div>
+      <div class="mode-grid">
+        <button class="mode-btn active" id="mode-freq" data-mode="frequency">
+          <span class="label">Rarity</span>
+          <span class="desc">by freq</span>
+        </button>
+        <button class="mode-btn" id="mode-status" data-mode="status">
+          <span class="label">Status</span>
+          <span class="desc">known/new</span>
+        </button>
+        <button class="mode-btn" id="mode-knowledge" data-mode="knowledge">
+          <span class="label">Anki</span>
+          <span class="desc">SRS stage</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Advanced options -->
+    <div class="section">
+      <div class="collapsible-header" id="advanced-toggle">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+        </svg>
+        <span>More options</span>
+      </div>
+      <div class="collapsible-content" id="advanced-content">
+        <div class="toggle-row">
+          <label for="mokuro-mode">Mokuro mode (manga)</label>
+          <input type="checkbox" id="mokuro-mode" role="switch">
+        </div>
+        <div class="ignore-btns" id="ignore-section">
+          <button id="ignore-domain-btn">Ignore domain</button>
+          <button id="ignore-page-btn">Ignore page</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <a href="#" id="sync-link">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+        </svg>
+        <span id="sync-link-text">Sync</span>
+      </a>
+      <a href="#" id="shortcuts-link">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
+        </svg>
+        Shortcuts
+      </a>
+    </div>
+  </main>
+
+  <script type="module" src="popup.ts"></script>
+</body>
+</html>

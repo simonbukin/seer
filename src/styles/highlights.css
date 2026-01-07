@@ -1,0 +1,117 @@
+/* Fallback span-based highlighting */
+.seer-unknown {
+  border-radius: 2px;
+  padding: 0 1px;
+  transition: opacity 0.3s ease-out, background-color 0.2s ease;
+  will-change: opacity;
+}
+
+/* Gradient: Cold (blue) → Warm (red) based on frequency */
+.seer-freq-very-common {
+  background-color: rgba(96, 165, 250, 0.35);  /* Blue - top 1k */
+}
+
+.seer-freq-common {
+  background-color: rgba(34, 211, 238, 0.35);  /* Cyan - 1k-5k */
+}
+
+.seer-freq-medium {
+  background-color: rgba(250, 204, 21, 0.35);  /* Yellow - 5k-15k */
+}
+
+.seer-freq-uncommon {
+  background-color: rgba(251, 146, 60, 0.35);  /* Orange - 15k-50k */
+}
+
+.seer-freq-rare {
+  background-color: rgba(248, 113, 113, 0.35); /* Red - 50k+ */
+}
+
+/* Stats panel */
+.seer-stats-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  z-index: 999999;
+  min-width: 200px;
+}
+
+.seer-stats-panel h3 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.seer-stats-panel .stat-row {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0;
+  color: #4b5563;
+}
+
+.seer-stats-panel .stat-value {
+  font-weight: 500;
+  color: #111827;
+}
+
+.seer-stats-panel .comprehension {
+  font-size: 24px;
+  font-weight: 700;
+  color: #059669;
+  text-align: center;
+  margin: 8px 0;
+}
+
+/* Sparkle effect for scroll-to-sentence */
+@keyframes seer-sparkle {
+  0% {
+    background-color: rgba(250, 204, 21, 0);
+    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0);
+  }
+  15% {
+    background-color: rgba(250, 204, 21, 0.6);
+    box-shadow: 0 0 20px 10px rgba(250, 204, 21, 0.4);
+  }
+  30% {
+    background-color: rgba(250, 204, 21, 0.3);
+    box-shadow: 0 0 30px 15px rgba(250, 204, 21, 0.2);
+  }
+  50% {
+    background-color: rgba(250, 204, 21, 0.5);
+    box-shadow: 0 0 25px 12px rgba(250, 204, 21, 0.3);
+  }
+  70% {
+    background-color: rgba(250, 204, 21, 0.3);
+    box-shadow: 0 0 15px 8px rgba(250, 204, 21, 0.2);
+  }
+  100% {
+    background-color: rgba(250, 204, 21, 0);
+    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0);
+  }
+}
+
+@keyframes seer-sparkle-border {
+  0%, 100% {
+    outline: 3px solid transparent;
+    outline-offset: 0;
+  }
+  15%, 50% {
+    outline: 3px solid rgba(250, 204, 21, 0.8);
+    outline-offset: 4px;
+  }
+}
+
+.seer-sparkle-highlight {
+  animation: seer-sparkle 2.5s ease-in-out, seer-sparkle-border 2.5s ease-in-out;
+  border-radius: 4px;
+  position: relative;
+  z-index: 1000;
+}
